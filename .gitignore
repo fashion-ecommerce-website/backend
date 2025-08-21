@@ -19,6 +19,7 @@ buildNumber.properties
 *.swp
 *.swo
 *~
+.mvn/
 
 # OS
 .DS_Store
