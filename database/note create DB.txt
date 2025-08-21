@@ -1,7 +1,0 @@
-- Tạo một bảng Image để lưu image của productDetail
-- mối quan hệ giữa productDetail - Image là 1 - N
-- bỏ nối giữa bảng ProductAttribute và Product, nối giữa Product và ProductAttribute 
-- thêm field "limit" vào Promotion và optional trường hợp giảm giá theo % hoặc theo value
-- bảng consignee như cũ giữa user và address
-- bỏ bảng affliate
-- Nối wishlist với product_details
