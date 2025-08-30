@@ -33,7 +33,7 @@ import lombok.Builder.Default;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "refresh_tokens")
-public class RefreshToken {
+public class RefreshTokenEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,7 +42,7 @@ public class RefreshToken {
 	@NotNull(message = "User is required")
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_refresh_token_user"))
-	private User user;
+	private UserEntity user;
 
 	@NotNull(message = "JTI is required")
 	@Column(nullable = false, unique = true, length = 36)
@@ -71,5 +71,3 @@ public class RefreshToken {
 	@Column(name = "updated_at")
 	private LocalDateTime updatedAt;
 }
-
-

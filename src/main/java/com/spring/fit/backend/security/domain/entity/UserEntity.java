@@ -16,10 +16,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Index;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,15 +27,15 @@ import lombok.Builder.Default;
 
 @Entity
 @Table(name = "users", indexes = {
-    @Index(name = "idx_user_email", columnList = "email", unique = true),
-    @Index(name = "idx_user_username", columnList = "username", unique = true)
+		@Index(name = "idx_user_email", columnList = "email", unique = true),
+		@Index(name = "idx_user_username", columnList = "username", unique = true)
 })
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class UserEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,7 +57,7 @@ public class User {
 	@Column(name = "avatar_url", length = 500)
 	private String avatarUrl;
 
-    @Default
+	@Default
 	@Column(name = "is_active", nullable = false)
 	private boolean isActive = true;
 
@@ -89,11 +86,9 @@ public class User {
 	// Relationships
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default
-	private Set<UserRole> userRoles = new LinkedHashSet<>();
+	private Set<UserRoleEntity> userRoles = new LinkedHashSet<>();
 
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default
-	private Set<RefreshToken> refreshTokens = new LinkedHashSet<>();
+	private Set<RefreshTokenEntity> refreshTokens = new LinkedHashSet<>();
 }
-
-

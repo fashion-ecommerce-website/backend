@@ -8,7 +8,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import com.spring.fit.backend.security.domain.entity.User;
+import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -16,24 +16,26 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
-    
-    private final UserRepository userRepository;
-    
-    @Override
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findActiveUserByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
-        
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getEmail())
-                .password(user.getPassword())
-                .authorities(user.getUserRoles().stream()
-                        .map(userRole -> new SimpleGrantedAuthority("ROLE_" + userRole.getRole().getRoleName()))
-                        .collect(Collectors.toList()))
-                .accountExpired(!user.isActive())
-                .accountLocked(false)
-                .credentialsExpired(false)
-                .disabled(!user.isActive())
-                .build();
-    }
+
+        private final UserRepository userRepository;
+
+        @Override
+        public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+                UserEntity user = userRepository.findActiveUserByEmail(email)
+                                .orElseThrow(() -> new UsernameNotFoundException(
+                                                "User not found with email: " + email));
+
+                return org.springframework.security.core.userdetails.User.builder()
+                                .username(user.getEmail())
+                                .password(user.getPassword())
+                                .authorities(user.getUserRoles().stream()
+                                                .map(userRole -> new SimpleGrantedAuthority(
+                                                                "ROLE_" + userRole.getRole().getRoleName()))
+                                                .collect(Collectors.toList()))
+                                .accountExpired(!user.isActive())
+                                .accountLocked(false)
+                                .credentialsExpired(false)
+                                .disabled(!user.isActive())
+                                .build();
+        }
 }
