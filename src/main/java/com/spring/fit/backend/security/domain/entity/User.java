@@ -44,27 +44,26 @@ public class User {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false, unique = true, length = 255)
+	@Column(nullable = false, unique = true, length = 320)
 	private String email;
 
 	@Column(nullable = false)
 	private String password;
 
-	@Column(nullable = false, unique = true, length = 50)
+	@Column
 	private String username;
 
-	@Pattern(regexp = "^[0-9]{10,11}$", message = "Invalid phone number format")
-	@Column(length = 15)
+	@Column
 	private String phone;
 
-	@Column(name = "avatar_url", length = 500)
+	@Column(name = "avatar_url")
 	private String avatarUrl;
 
     @Default
 	@Column(name = "is_active", nullable = false)
 	private boolean isActive = true;
 
-	@Column(length = 500)
+	@Column
 	private String reason;
 
 	@CreationTimestamp
@@ -94,6 +93,10 @@ public class User {
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default
 	private Set<RefreshToken> refreshTokens = new LinkedHashSet<>();
+
+	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+	@Builder.Default
+	private Set<Address> addresses = new LinkedHashSet<>();
 }
 
 

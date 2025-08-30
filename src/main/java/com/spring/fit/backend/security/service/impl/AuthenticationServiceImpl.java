@@ -120,8 +120,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 )
         );
         
-        // Get user details
-        User user = userRepository.findActiveUserByEmail(request.getEmail())
+        // Get user details with roles
+        User user = userRepository.findActiveUserByEmailWithRoles(request.getEmail())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
         
         // Update last login
