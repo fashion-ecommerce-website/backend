@@ -22,17 +22,17 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
 
     List<RefreshTokenEntity> findByUserIdAndIsRevokedFalse(Long userId);
 
-    @Query("SELECT rt FROM RefreshToken rt WHERE rt.user.id = :userId AND rt.isRevoked = false AND rt.expiresAt > :now")
+    @Query("SELECT rt FROM RefreshTokenEntity rt WHERE rt.user.id = :userId AND rt.isRevoked = false AND rt.expiresAt > :now")
     List<RefreshTokenEntity> findValidTokensByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
-    @Query("SELECT rt FROM RefreshToken rt WHERE rt.expiresAt < :now AND rt.isRevoked = false")
+    @Query("SELECT rt FROM RefreshTokenEntity rt WHERE rt.expiresAt < :now AND rt.isRevoked = false")
     List<RefreshTokenEntity> findExpiredTokens(@Param("now") LocalDateTime now);
 
     @Modifying
-    @Query("UPDATE RefreshToken rt SET rt.isRevoked = true, rt.revokedAt = :revokedAt WHERE rt.user.id = :userId AND rt.isRevoked = false")
+    @Query("UPDATE RefreshTokenEntity rt SET rt.isRevoked = true, rt.revokedAt = :revokedAt WHERE rt.user.id = :userId AND rt.isRevoked = false")
     void revokeAllUserTokens(@Param("userId") Long userId, @Param("revokedAt") LocalDateTime revokedAt);
 
     @Modifying
-    @Query("UPDATE RefreshToken rt SET rt.isRevoked = true, rt.revokedAt = :revokedAt WHERE rt.jti = :jti")
+    @Query("UPDATE RefreshTokenEntity rt SET rt.isRevoked = true, rt.revokedAt = :revokedAt WHERE rt.jti = :jti")
     void revokeTokenByJti(@Param("jti") UUID jti, @Param("revokedAt") LocalDateTime revokedAt);
 }

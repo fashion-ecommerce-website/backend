@@ -1,7 +1,9 @@
 package com.spring.fit.backend.security.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -199,18 +201,55 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         private UserDetails createUserDetails(UserEntity user) {
+                // Create authorities safely
+                List<SimpleGrantedAuthority> authorities = createAuthorities(user);
+                
                 return org.springframework.security.core.userdetails.User.builder()
                                 .username(user.getEmail())
                                 .password(user.getPassword())
-                                .authorities(user.getUserRoles().stream()
-                                                .map(userRole -> new SimpleGrantedAuthority(
-                                                                "ROLE_" + userRole.getRole().getRoleName()))
-                                                .collect(Collectors.toList()))
+                                .authorities(authorities)
                                 .accountExpired(!user.isActive())
                                 .accountLocked(false)
                                 .credentialsExpired(false)
                                 .disabled(!user.isActive())
                                 .build();
+        }
+        
+        /**
+         * Create authorities safely from user roles
+         */
+        private List<SimpleGrantedAuthority> createAuthorities(UserEntity user) {
+                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                
+                try {
+                        if (user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
+                                authorities = user.getUserRoles().stream()
+                                                .filter(userRole -> userRole != null && userRole.isActive())
+                                                .filter(userRole -> userRole.getRole() != null && userRole.getRole().isActive())
+                                                .map(userRole -> {
+                                                        String roleName = userRole.getRole().getRoleName();
+                                                        if (roleName != null && !roleName.trim().isEmpty()) {
+                                                                return new SimpleGrantedAuthority("ROLE_" + roleName.trim());
+                                                        }
+                                                        return null;
+                                                })
+                                                .filter(authority -> authority != null)
+                                                .collect(Collectors.toList());
+                        }
+                        
+                        // Add default USER role if no roles found
+                        if (authorities.isEmpty()) {
+                                log.warn("No valid roles found for user {}, adding default USER role", user.getEmail());
+                                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                        }
+                        
+                } catch (Exception e) {
+                        log.error("Error creating authorities for user {}: {}", user.getEmail(), e.getMessage(), e);
+                        // Add default USER role as fallback
+                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                }
+                
+                return authorities;
         }
 
         private String generateRefreshToken(UserDetails userDetails) {
