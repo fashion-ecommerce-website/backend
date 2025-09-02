@@ -6,4 +6,6 @@ import com.spring.fit.backend.user.domain.dto.UserResponse;
 public interface UserService {
     
     UserResponse updateUser(String email, UpdateUserRequest request);
+
+    UserResponse getCurrentUser(String email);
 }

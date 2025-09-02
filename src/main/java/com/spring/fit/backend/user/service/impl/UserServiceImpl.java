@@ -26,6 +26,17 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
 
     @Override
+    public UserResponse getCurrentUser(String email) {
+        log.info("Fetching current user: {}", email);
+        if (isEmpty(email)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Invalid email");
+        }
+        UserEntity user = userRepository.findActiveUserByEmail(email.trim())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+        return UserResponse.fromEntity(user);
+    }
+
+    @Override
     public UserResponse updateUser(String email, UpdateUserRequest request) {
         log.info("Updating user: {}", email);
         
