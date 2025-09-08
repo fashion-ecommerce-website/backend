@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -20,7 +21,11 @@ import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.security.domain.dto.AuthenticationRequest;
 import com.spring.fit.backend.security.domain.dto.AuthenticationResponse;
 import com.spring.fit.backend.security.domain.dto.RegisterRequest;
+import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
+import com.spring.fit.backend.security.domain.dto.ForgotPasswordRequest;
+import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
 import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
+import com.spring.fit.backend.security.domain.entity.PasswordResetToken;
 import com.spring.fit.backend.security.domain.entity.RefreshTokenEntity;
 import com.spring.fit.backend.security.domain.entity.RoleEntity;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
@@ -30,7 +35,10 @@ import com.spring.fit.backend.security.repository.RefreshTokenRepository;
 import com.spring.fit.backend.security.repository.RoleRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.security.service.AuthenticationService;
+import com.spring.fit.backend.security.service.EmailService;
+import com.spring.fit.backend.security.service.PasswordResetTokenService;
 
+import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,6 +53,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         private final PasswordEncoder passwordEncoder;
         private final JwtService jwtService;
         private final AuthenticationManager authenticationManager;
+        private final PasswordResetTokenService tokenService;
+        private final EmailService emailService;
 
         @Override
         @Transactional
@@ -200,10 +210,72 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 }
         }
 
+        @Override
+        @Transactional
+        public void changePassword(ChangePasswordRequest request) {
+                log.info("Changing password for user: {}", request.getEmail());
+
+                UserEntity user = userRepository.findActiveUserByEmail(request.getEmail())
+                                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+
+                if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                        throw new ErrorException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+                }
+
+                user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+                user.setUpdatedAt(LocalDateTime.now());
+                userRepository.save(user);
+
+                log.info("Password changed successfully for user: {}", user.getEmail());
+        }
+
+        @Override
+        @Transactional
+        public void resetPassword(ResetPasswordRequest request) {
+                log.info("Resetting password using token");
+
+                UserEntity user = userRepository.findByResetPasswordToken(request.getToken())
+                                .orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, "Invalid reset token"));
+
+                if (user.getResetPasswordTokenExpiresAt() == null
+                                || user.getResetPasswordTokenExpiresAt().isBefore(LocalDateTime.now())) {
+                        throw new ErrorException(HttpStatus.BAD_REQUEST, "Reset token expired");
+                }
+
+                user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+                user.setResetPasswordToken(null);
+                user.setResetPasswordTokenExpiresAt(null);
+                user.setUpdatedAt(LocalDateTime.now());
+                userRepository.save(user);
+
+                log.info("Password reset successfully for user: {}", user.getEmail());
+        }
+
+        @Override
+        @Transactional
+        public void forgotPassword(String email) {
+                Optional<UserEntity> user = userRepository.findByEmail(email);
+                if (user.isPresent()) {
+                        PasswordResetToken tokenIxisted = tokenService.findByUser(user.get());
+                        if (tokenIxisted != null) {
+                                tokenService.deleteToken(tokenIxisted.getToken());
+                        }
+                        PasswordResetToken token = tokenService.createToken(user.get());
+                        String resetLink = "http://localhost:3000/resetPassword?token=" + token.getToken();
+                        try {
+                                emailService.sendEmail(email, "Password Reset",
+                                                "Click here to reset your password: " + resetLink + "\n "
+                                                                + "Reset link is valid for 60 seconds");
+                        } catch (MessagingException e) {
+                                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to send email");
+                        }
+                }
+        }
+
         private UserDetails createUserDetails(UserEntity user) {
                 // Create authorities safely
                 List<SimpleGrantedAuthority> authorities = createAuthorities(user);
-                
+
                 return org.springframework.security.core.userdetails.User.builder()
                                 .username(user.getEmail())
                                 .password(user.getPassword())
@@ -214,41 +286,43 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                                 .disabled(!user.isActive())
                                 .build();
         }
-        
+
         /**
          * Create authorities safely from user roles
          */
         private List<SimpleGrantedAuthority> createAuthorities(UserEntity user) {
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                
+
                 try {
                         if (user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
                                 authorities = user.getUserRoles().stream()
                                                 .filter(userRole -> userRole != null && userRole.isActive())
-                                                .filter(userRole -> userRole.getRole() != null && userRole.getRole().isActive())
+                                                .filter(userRole -> userRole.getRole() != null
+                                                                && userRole.getRole().isActive())
                                                 .map(userRole -> {
                                                         String roleName = userRole.getRole().getRoleName();
                                                         if (roleName != null && !roleName.trim().isEmpty()) {
-                                                                return new SimpleGrantedAuthority("ROLE_" + roleName.trim());
+                                                                return new SimpleGrantedAuthority(
+                                                                                "ROLE_" + roleName.trim());
                                                         }
                                                         return null;
                                                 })
                                                 .filter(authority -> authority != null)
                                                 .collect(Collectors.toList());
                         }
-                        
+
                         // Add default USER role if no roles found
                         if (authorities.isEmpty()) {
                                 log.warn("No valid roles found for user {}, adding default USER role", user.getEmail());
                                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                         }
-                        
+
                 } catch (Exception e) {
                         log.error("Error creating authorities for user {}: {}", user.getEmail(), e.getMessage(), e);
                         // Add default USER role as fallback
                         authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                 }
-                
+
                 return authorities;
         }
 
