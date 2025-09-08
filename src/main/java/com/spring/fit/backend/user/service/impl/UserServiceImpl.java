@@ -1,5 +1,6 @@
 package com.spring.fit.backend.user.service.impl;
 
+import java.time.LocalDate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -50,23 +51,24 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
         
         // Update fields
-        updateField(user, request.getEmail(), user.getEmail(), 
-                newEmail -> user.setEmail(newEmail), 
-                newEmail -> userRepository.existsByEmail(newEmail));
         
         updateField(user, request.getUsername(), user.getUsername(), 
                 newUsername -> user.setUsername(newUsername), 
                 newUsername -> userRepository.existsByUsername(newUsername));
-        
+
+        String newDobStr = request.getDob() != null ? request.getDob().toString() : null;
+        String currentDobStr = user.getDob() != null ? user.getDob().toString() : null;
+
+        updateField(user, newDobStr, currentDobStr,
+                str -> user.setDob(LocalDate.parse(str)),
+                null);
+
         updateField(user, request.getPhone(), user.getPhone(), 
                 newPhone -> user.setPhone(newPhone), null);
         
-        updateField(user, request.getAvatarUrl(), user.getAvatarUrl(), 
+        updateField(user, request.getAvatarUrl(), user.getAvatarUrl(),
                 newAvatarUrl -> user.setAvatarUrl(newAvatarUrl), null);
-        
-        updateField(user, request.getReason(), user.getReason(), 
-                newReason -> user.setReason(newReason), null);
-        
+
         // Save and return
         UserEntity updatedUser = userRepository.save(user);
         log.info("User updated: {}", updatedUser.getEmail());
