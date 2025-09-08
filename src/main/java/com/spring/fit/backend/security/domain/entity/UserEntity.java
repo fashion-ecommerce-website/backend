@@ -83,6 +83,13 @@ public class UserEntity {
 	@Default
 	private boolean phoneVerified = false;
 
+	// Password reset support
+	@Column(name = "reset_password_token", length = 255)
+	private String resetPasswordToken;
+
+	@Column(name = "reset_password_expires_at")
+	private LocalDateTime resetPasswordTokenExpiresAt;
+
 	// Relationships
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default

@@ -11,6 +11,9 @@ import com.spring.fit.backend.security.domain.dto.AuthenticationRequest;
 import com.spring.fit.backend.security.domain.dto.AuthenticationResponse;
 import com.spring.fit.backend.security.domain.dto.RegisterRequest;
 import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
+import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
+import com.spring.fit.backend.security.domain.dto.ForgotPasswordRequest;
+import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
 import com.spring.fit.backend.security.service.AuthenticationService;
 
 import jakarta.validation.Valid;
@@ -57,6 +60,24 @@ public class AuthenticationController {
 
         authenticationService.logout(request.getRefreshToken());
 
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authenticationService.changePassword(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@RequestBody String email) {
+        authenticationService.forgotPassword(email);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authenticationService.resetPassword(request);
         return ResponseEntity.ok().build();
     }
 }
