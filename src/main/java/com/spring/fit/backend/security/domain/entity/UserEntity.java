@@ -1,5 +1,6 @@
 package com.spring.fit.backend.security.domain.entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -49,6 +50,9 @@ public class UserEntity {
 
 	@Column(nullable = false, unique = true, length = 50)
 	private String username;
+
+	@Column(name = "dob")
+	private LocalDate dob;
 
 	@Pattern(regexp = "^[0-9]{10,11}$", message = "Invalid phone number format")
 	@Column(length = 15)
