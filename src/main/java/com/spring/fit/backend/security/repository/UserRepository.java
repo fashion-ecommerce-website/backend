@@ -25,4 +25,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     @Query("SELECT u FROM UserEntity u WHERE u.username = :username AND u.isActive = true")
     Optional<UserEntity> findActiveUserByUsername(@Param("username") String username);
+
+    Optional<UserEntity> findByPhone(String phone);
 }

@@ -14,4 +14,9 @@ public interface AuthenticationService {
     AuthenticationResponse refreshToken(RefreshTokenRequest request);
     
     void logout(String refreshToken);
+    
+    /**
+     * Verify phone number after OTP verification
+     */
+    void verifyPhone(String phone);
 }

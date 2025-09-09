@@ -30,6 +30,7 @@ import com.spring.fit.backend.security.repository.RefreshTokenRepository;
 import com.spring.fit.backend.security.repository.RoleRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.security.service.AuthenticationService;
+import com.spring.fit.backend.security.service.OtpService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         private final PasswordEncoder passwordEncoder;
         private final JwtService jwtService;
         private final AuthenticationManager authenticationManager;
+        private final OtpService otpService;
 
         @Override
         @Transactional
@@ -95,6 +97,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getUserRoles().add(userRoleEntity);
                 userRepository.save(user);
 
+                // Send OTP to phone number
+                if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+                        try {
+                                otpService.sendOtp(request.getPhone());
+                                log.info("OTP sent to phone: {}", request.getPhone());
+                        } catch (Exception e) {
+                                log.error("Failed to send OTP to phone {}: {}", request.getPhone(), e.getMessage());
+                        }
+                }
+
                 // Generate tokens
                 UserDetails userDetails = createUserDetails(user);
                 String accessToken = jwtService.generateToken(userDetails);
@@ -124,6 +136,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 // Get user details
                 UserEntity user = userRepository.findActiveUserByEmail(request.getEmail())
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+
+                // Check if phone is verified
+                if (user.getPhone() != null && !user.getPhone().trim().isEmpty() && !user.isPhoneVerified()) {
+                        throw new ErrorException(HttpStatus.FORBIDDEN, "Phone number must be verified before login");
+                }
 
                 // Update last login
                 user.setLastLoginAt(LocalDateTime.now());
@@ -270,5 +287,19 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 refreshTokenRepository.save(refreshTokenEntity);
 
                 return refreshToken;
+        }
+
+        @Override
+        @Transactional
+        public void verifyPhone(String phone) {
+                log.info("Verifying phone number: {}", phone);
+                
+                UserEntity user = userRepository.findByPhone(phone)
+                                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+                
+                user.setPhoneVerified(true);
+                userRepository.save(user);
+                
+                log.info("Phone verified successfully for user: {}", user.getEmail());
         }
 }
