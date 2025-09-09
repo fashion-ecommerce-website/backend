@@ -27,4 +27,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findActiveUserByUsername(@Param("username") String username);
 
     Optional<UserEntity> findByPhone(String phone);
+
+    Optional<UserEntity> findByResetPasswordToken(String resetPasswordToken);
 }
