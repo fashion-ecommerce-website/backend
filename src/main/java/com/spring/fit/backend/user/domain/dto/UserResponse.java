@@ -1,5 +1,6 @@
 package com.spring.fit.backend.user.domain.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -22,6 +23,7 @@ public class UserResponse {
     private String email;
     private String username;
     private String phone;
+    private LocalDate dob;
     private String avatarUrl;
     private boolean isActive;
     private String reason;
@@ -42,6 +44,7 @@ public class UserResponse {
                 .id(user.getId())
                 .email(user.getEmail())
                 .username(user.getUsername())
+                .dob(user.getDob())
                 .phone(user.getPhone())
                 .avatarUrl(user.getAvatarUrl())
                 .isActive(user.isActive())

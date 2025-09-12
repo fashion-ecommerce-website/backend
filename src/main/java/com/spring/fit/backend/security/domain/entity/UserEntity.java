@@ -1,5 +1,6 @@
 package com.spring.fit.backend.security.domain.entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -50,6 +51,9 @@ public class UserEntity {
 	@Column(nullable = false, unique = true, length = 50)
 	private String username;
 
+	@Column(name = "dob")
+	private LocalDate dob;
+
 	@Pattern(regexp = "^[0-9]{10,11}$", message = "Invalid phone number format")
 	@Column(length = 15)
 	private String phone;
@@ -82,6 +86,13 @@ public class UserEntity {
 	@Column(name = "phone_verified", nullable = false)
 	@Default
 	private boolean phoneVerified = false;
+
+	// Password reset support
+	@Column(name = "reset_password_token", length = 255)
+	private String resetPasswordToken;
+
+	@Column(name = "reset_password_expires_at")
+	private LocalDateTime resetPasswordTokenExpiresAt;
 
 	// Relationships
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
