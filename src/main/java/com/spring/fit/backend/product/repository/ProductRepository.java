@@ -116,4 +116,62 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
             Pageable pageable
     );
 
+    @Query(
+            value = """
+        WITH filtered AS (
+          SELECT d.id, d.product_id, d.color_id, d.size_id, d.price, d.quantity,
+                 d.slug AS product_slug,
+                 p.title AS product_title,
+                 c.name  AS color_name
+          FROM product_details d
+          JOIN products p ON p.id = d.product_id
+          JOIN colors   c ON c.id = d.color_id
+          JOIN sizes    s ON s.id = d.size_id
+          JOIN product_categories pc ON pc.product_id = p.id
+          JOIN categories cat ON cat.id = pc.category_id
+          WHERE d.is_active = TRUE AND d.id IN (:ids)
+        )
+        , one_per_color AS (
+          SELECT DISTINCT ON (product_id, color_id)
+                 id            AS detail_id,
+                 product_title,
+                 product_slug,
+                 color_name,
+                 price,
+                 quantity,
+                 product_id,
+                 color_id
+          FROM filtered
+          ORDER BY product_id, color_id, price   -- pick cheapest per (product,color)
+        )
+        SELECT
+          opc.detail_id                  AS detailId,
+          opc.product_title              AS productTitle,
+          opc.product_slug               AS productSlug,
+          opc.color_name                 AS colorName,
+          opc.price                      AS price,
+          opc.quantity                   AS quantity,
+          -- all unique colors of this product:
+          (SELECT ARRAY(
+               SELECT DISTINCT c2.name
+               FROM product_details d2
+               JOIN colors c2 ON c2.id = d2.color_id
+               WHERE d2.product_id = opc.product_id AND d2.is_active = TRUE
+               ORDER BY c2.name
+           ))                              AS colors,
+          -- first 2 image urls of this detail:
+          (SELECT ARRAY(
+               SELECT i.url
+               FROM product_images pi
+               JOIN images i ON i.id = pi.image_id
+               WHERE pi.detail_id = opc.detail_id
+               ORDER BY pi.created_at
+               LIMIT 2
+           ))                              AS imageUrls
+        FROM one_per_color opc
+        """,
+        nativeQuery = true
+    )
+    List<ProductCardView> findRecentlyViewedProduct(@Param("ids") List<Integer> id);
+
 }

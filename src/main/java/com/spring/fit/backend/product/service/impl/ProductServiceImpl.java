@@ -146,6 +146,31 @@ public class ProductServiceImpl implements ProductService {
                 .collect(Collectors.toList());
     }
     
+    @Override
+    public List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        
+        log.debug("Getting recently viewed products for IDs: {}", productIds);
+        
+        try {
+            // Convert Long to Integer for repository method
+            List<Integer> integerIds = productIds.stream()
+                    .map(Long::intValue)
+                    .toList();
+            
+            List<ProductCardView> products = productDetailRepository.findRecentlyViewedProduct(integerIds);
+            log.debug("Found {} recently viewed products", products.size());
+            
+            return products;
+            
+        } catch (Exception e) {
+            log.error("Error getting recently viewed products: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây", e);
+        }
+    }
+    
     // Records cho better type safety và immutability
     private record SortParams(String field, String direction) {}
     private record FilterParams(String title, List<String> colors, List<String> sizes, boolean colorsEmpty, boolean sizesEmpty) {}
