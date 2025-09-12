@@ -1,19 +1,20 @@
 package com.spring.fit.backend.user.controller;
 
+import com.spring.fit.backend.product.domain.dto.ProductCardView;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import com.spring.fit.backend.user.domain.dto.RemoveRecentProductsRequest;
 import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
 import com.spring.fit.backend.user.domain.dto.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -34,5 +35,37 @@ public class UserController {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserResponse updatedUser = userService.updateUser(email, request);
         return ResponseEntity.ok(updatedUser);
+    }
+
+    @PostMapping("/recently/{productId}")
+    public ResponseEntity<Void> addProductToRecently(
+            @PathVariable @Positive(message = "Product ID phải là số dương") long productId) {
+        
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        userService.addProductToRecentlyViewed(email, productId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/recently")
+    public ResponseEntity<List<ProductCardView>> getRecentlyProducts() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        List<ProductCardView> recentProducts = userService.getRecentlyViewedProducts(email);
+        return ResponseEntity.ok(recentProducts);
+    }
+
+    @DeleteMapping("/recently/remove")
+    public ResponseEntity<Void> removeSelectedRecentProducts(
+            @RequestBody @Valid RemoveRecentProductsRequest request) {
+        
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        userService.removeSelectedProductsFromRecentlyViewed(email, request.getProductIds());
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/recently/clear")
+    public ResponseEntity<Void> clearRecentlyViewed() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        userService.clearRecentlyViewedProducts(email);
+        return ResponseEntity.ok().build();
     }
 }

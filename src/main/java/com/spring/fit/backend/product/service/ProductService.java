@@ -6,7 +6,7 @@ import com.spring.fit.backend.product.domain.dto.ProductCardView;
 import java.util.List;
 
 public interface ProductService {
-    public PageResult<ProductCardView> filterByCategory(
+    PageResult<ProductCardView> filterByCategory(
             String categorySlug,
             String title,
             List<String> colorNames,      // có thể null/empty
@@ -15,4 +15,6 @@ public interface ProductService {
             String sortBy,                // "price_asc","price_desc","name_asc","name_desc"
             int page,
             int pageSize);
+    
+    List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds);
 }
