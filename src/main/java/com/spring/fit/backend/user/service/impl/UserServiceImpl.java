@@ -19,6 +19,7 @@ import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
+import com.spring.fit.backend.user.domain.dto.UpdateUserStatusRequest;
 import com.spring.fit.backend.user.domain.dto.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
@@ -78,11 +79,6 @@ public class UserServiceImpl implements UserService {
         updateField(user, request.getAvatarUrl(), user.getAvatarUrl(),
                 newAvatarUrl -> user.setAvatarUrl(newAvatarUrl), null);
 
-        // Update isActive status if provided
-        if (request.getIsActive() != null) {
-            user.setActive(request.getIsActive());
-        }
-
         // Save and return
         UserEntity updatedUser = userRepository.save(user);
         log.info("User updated: {}", updatedUser.getEmail());
@@ -99,6 +95,29 @@ public class UserServiceImpl implements UserService {
                 .toList();
         log.info("Found {} users", userResponses.size());
         return userResponses;
+    }
+
+    @Override
+    public UserResponse updateUserStatus(UpdateUserStatusRequest request) {
+        log.info("Updating user status for user ID: {} to status: {}", request.getUserId(), request.getIsActive());
+        
+        // Validate request
+        if (request == null || request.getUserId() == null || request.getIsActive() == null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Invalid request: userId and isActive are required");
+        }
+        
+        // Find user by ID
+        UserEntity user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found with ID: " + request.getUserId()));
+        
+        // Update status
+        user.setActive(request.getIsActive());
+        
+        // Save and return
+        UserEntity updatedUser = userRepository.save(user);
+        log.info("User status updated for user ID: {} to status: {}", updatedUser.getId(), updatedUser.isActive());
+        
+        return UserResponse.fromEntity(updatedUser);
     }
 
     private void updateField(UserEntity user, String newValue, String currentValue, 

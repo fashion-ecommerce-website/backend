@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.spring.fit.backend.user.domain.dto.RemoveRecentProductsRequest;
 import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
+import com.spring.fit.backend.user.domain.dto.UpdateUserStatusRequest;
 import com.spring.fit.backend.user.domain.dto.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
@@ -40,6 +41,12 @@ public class UserController {
     public ResponseEntity<UserResponse> updateUser(@Valid @RequestBody UpdateUserRequest request) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserResponse updatedUser = userService.updateUser(email, request);
+        return ResponseEntity.ok(updatedUser);
+    }
+
+    @PutMapping("/status")
+    public ResponseEntity<UserResponse> updateUserStatus(@Valid @RequestBody UpdateUserStatusRequest request) {
+        UserResponse updatedUser = userService.updateUserStatus(request);
         return ResponseEntity.ok(updatedUser);
     }
 

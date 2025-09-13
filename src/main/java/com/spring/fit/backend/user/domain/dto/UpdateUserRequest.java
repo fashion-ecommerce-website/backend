@@ -22,6 +22,4 @@ public class UpdateUserRequest {
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
     private LocalDate dob;
-    
-    private Boolean isActive;
 }
