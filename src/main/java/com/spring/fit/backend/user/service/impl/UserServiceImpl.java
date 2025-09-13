@@ -78,11 +78,27 @@ public class UserServiceImpl implements UserService {
         updateField(user, request.getAvatarUrl(), user.getAvatarUrl(),
                 newAvatarUrl -> user.setAvatarUrl(newAvatarUrl), null);
 
+        // Update isActive status if provided
+        if (request.getIsActive() != null) {
+            user.setActive(request.getIsActive());
+        }
+
         // Save and return
         UserEntity updatedUser = userRepository.save(user);
         log.info("User updated: {}", updatedUser.getEmail());
         
         return UserResponse.fromEntity(updatedUser);
+    }
+
+    @Override
+    public List<UserResponse> getAllUsers() {
+        log.info("Fetching all users");
+        List<UserEntity> users = userRepository.findAll();
+        List<UserResponse> userResponses = users.stream()
+                .map(UserResponse::fromEntity)
+                .toList();
+        log.info("Found {} users", userResponses.size());
+        return userResponses;
     }
 
     private void updateField(UserEntity user, String newValue, String currentValue, 

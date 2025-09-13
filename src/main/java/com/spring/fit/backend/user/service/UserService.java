@@ -12,6 +12,8 @@ public interface UserService {
 
     UserResponse getCurrentUser(String email);
     
+    List<UserResponse> getAllUsers();
+    
     // Recently viewed products methods
     void addProductToRecentlyViewed(String email, long productId);
     
