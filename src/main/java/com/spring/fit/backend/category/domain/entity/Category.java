@@ -38,6 +38,9 @@ public class Category {
     @Column(nullable = false, unique = true, length = 255)
     private String slug;
 
+    @Column(nullable = false, length = 20)
+    private String status = "active";
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

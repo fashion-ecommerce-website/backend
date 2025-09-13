@@ -62,7 +62,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category saved = categoryRepository.save(category);
-        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(), null);
+        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(),saved.getStatus(), null);
     }
 
     @Override
@@ -85,9 +85,19 @@ public class CategoryServiceImpl implements CategoryService {
             category.setParent(null);
         }
 
+        // Validate status
+        if (request.getStatus() != null) {
+            String status = request.getStatus().trim().toLowerCase();
+            if (!status.equals("active") && !status.equals("inactive")) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, "Status must be 'active' or 'inactive'");
+            }
+            category.setStatus(status);
+        }
+
         Category updated = categoryRepository.save(category);
-        return new CategoryResponse(updated.getId(), updated.getName(), updated.getSlug(), null);
+        return new CategoryResponse(updated.getId(), updated.getName(), updated.getSlug(), updated.getStatus(), null);
     }
+
 
     @Override
     public List<CategoryResponse> getAllCategories() {
@@ -97,6 +107,7 @@ public class CategoryServiceImpl implements CategoryService {
                         c.getId(),
                         c.getName(),
                         c.getSlug(),
+                        c.getStatus(),
                         null // Không build tree, trả về phẳng
                 ))
                 .toList();

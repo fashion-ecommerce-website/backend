@@ -17,13 +17,14 @@ public class CategoryResponse {
     private Long id;
     private String name;
     private String slug;
+    private String status;
     private List<CategoryResponse> children;
 
     // Map tất cả category sang DTO phẳng
     public static Map<Long, CategoryResponse> mapAll(List<Category> categories) {
         Map<Long, CategoryResponse> map = new HashMap<>();
         for (Category c : categories) {
-            map.put(c.getId(), new CategoryResponse(c.getId(), c.getName(), c.getSlug(), new ArrayList<>()));
+            map.put(c.getId(), new CategoryResponse(c.getId(), c.getName(), c.getSlug(),c.getStatus(), new ArrayList<>()));
         }
         return map;
     }
