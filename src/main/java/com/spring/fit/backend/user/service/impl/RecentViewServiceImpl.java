@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 public class RecentViewServiceImpl implements RecentViewService {
     private final StringRedisTemplate redis;
 
-    private static final int LIMIT = 3;
+    private static final int LIMIT = 12;
     private static final Duration TTL = Duration.ofDays(30);
 
     private String key(long userId) { return "recent:prod:" + userId; }
