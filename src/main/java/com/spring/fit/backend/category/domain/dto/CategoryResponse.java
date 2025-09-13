@@ -6,10 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,40 +19,63 @@ public class CategoryResponse {
     private String slug;
     private List<CategoryResponse> children;
 
-    public static CategoryResponse mapToResponseRecursively(Category category) {
-        CategoryResponse response = new CategoryResponse();
-        response.setId(category.getId());
-        response.setName(category.getName());
-        response.setSlug(category.getSlug());
-
-        if (category.getChildren() != null && !category.getChildren().isEmpty()) {
-            List<CategoryResponse> childResponses = category.getChildren().stream()
-                    .map(CategoryResponse::mapToResponseRecursively)
-                    .toList();
-            response.setChildren(childResponses);
+    // Map tất cả category sang DTO phẳng
+    public static Map<Long, CategoryResponse> mapAll(List<Category> categories) {
+        Map<Long, CategoryResponse> map = new HashMap<>();
+        for (Category c : categories) {
+            map.put(c.getId(), new CategoryResponse(c.getId(), c.getName(), c.getSlug(), new ArrayList<>()));
         }
-
-        return response;
+        return map;
     }
-    public static CategoryResponse mapToResponse(Category category) {
-        if (category == null) return null;
 
-        CategoryResponse response = new CategoryResponse();
-        response.setId(category.getId());
-        response.setName(category.getName());
-        response.setSlug(category.getSlug());
+    // Build cây từ rootId
+    public static CategoryResponse buildTree(Long rootId, List<Category> allCategories) {
+        Map<Long, CategoryResponse> map = mapAll(allCategories);
 
-        if (category.getChildren() != null && !category.getChildren().isEmpty()) {
-            // ⚡ Sao chép danh sách con ra list mới để tránh ConcurrentModificationException
-            List<Category> childrenCopy = new ArrayList<>(category.getChildren());
-
-            response.setChildren(
-                    childrenCopy.stream()
-                            .map(CategoryResponse::mapToResponse)
-                            .collect(Collectors.toList())
-            );
+        for (Category c : allCategories) {
+            if (c.getParent() != null) {
+                CategoryResponse parentDto = map.get(c.getParent().getId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(map.get(c.getId()));
+                }
+            }
         }
 
-        return response;
+        CategoryResponse root = map.get(rootId);
+        if (root != null) {
+            setEmptyChildrenToNull(root);
+        }
+        return root;
+    }
+
+    // Build cây cho tất cả root
+    public static List<CategoryResponse> buildTree(List<Category> allCategories) {
+        Map<Long, CategoryResponse> map = mapAll(allCategories);
+
+        for (Category c : allCategories) {
+            if (c.getParent() != null) {
+                CategoryResponse parentDto = map.get(c.getParent().getId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(map.get(c.getId()));
+                }
+            }
+        }
+
+        List<CategoryResponse> roots = allCategories.stream()
+                .filter(c -> c.getParent() == null)
+                .map(c -> map.get(c.getId()))
+                .collect(Collectors.toList());
+
+        roots.forEach(CategoryResponse::setEmptyChildrenToNull);
+        return roots;
+    }
+
+    private static void setEmptyChildrenToNull(CategoryResponse node) {
+        if (node.getChildren() == null || node.getChildren().isEmpty()) {
+            node.setChildren(null);
+        } else {
+            node.getChildren().forEach(CategoryResponse::setEmptyChildrenToNull);
+        }
     }
 }
+

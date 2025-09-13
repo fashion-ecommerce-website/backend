@@ -17,6 +17,12 @@ public class CategoryController {
     // Lấy tất cả root category (cha cấp cao nhất) kèm cây con bên trong
     private final CategoryService categoryService;
 
+    @GetMapping
+    public ResponseEntity<List<CategoryResponse>> listAllCategories() {
+        List<CategoryResponse> allCategories = categoryService.getAllCategories();
+        return ResponseEntity.ok(allCategories);
+    }
+
     @GetMapping("/tree")
     public ResponseEntity<List<CategoryResponse>> getCategoryTree() {
         return ResponseEntity.ok(categoryService.getCategoryTree());
@@ -25,20 +31,6 @@ public class CategoryController {
     @GetMapping("/parent/{parentId}")
     public ResponseEntity<CategoryResponse> getCategoryTreeByParent(@PathVariable Long parentId) {
         CategoryResponse category = categoryService.getCategoryTreeByParent(parentId);
-        return ResponseEntity.ok(category);
-    }
-
-    // Tìm category theo slug
-    @GetMapping("/slug/{slug}")
-    public ResponseEntity<CategoryResponse> getCategoryBySlug(@PathVariable String slug) {
-        CategoryResponse category = categoryService.getCategoryBySlug(slug);
-        return ResponseEntity.ok(category);
-    }
-
-    // Tìm category theo tên
-    @GetMapping("/name/{name}")
-    public ResponseEntity<CategoryResponse> getCategoryByName(@PathVariable String name) {
-        CategoryResponse category = categoryService.getCategoryByName(name);
         return ResponseEntity.ok(category);
     }
 

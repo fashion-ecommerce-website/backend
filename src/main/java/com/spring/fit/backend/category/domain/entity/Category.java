@@ -1,5 +1,6 @@
 package com.spring.fit.backend.category.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.spring.fit.backend.product.domain.entity.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -23,10 +24,13 @@ public class Category {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
+    @JsonIgnore
     private Category parent;
 
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
-    private List<Category> children = new ArrayList<>();
+    @OneToMany(mappedBy = "parent")
+    @JsonIgnore
+    private Set<Category> children;
+
 
     @Column(nullable = false, columnDefinition = "text")
     private String name;

@@ -25,8 +25,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     boolean existsByName(String name);
 
 
-    @EntityGraph(attributePaths = "children")
-    @Query("SELECT c FROM Category c")
+    @Query("SELECT c FROM Category c LEFT JOIN FETCH c.children")
     List<Category> findAllWithChildren();
+
+
+
 
 }
