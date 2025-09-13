@@ -18,9 +18,9 @@ public interface AuthenticationService {
     void logout(String refreshToken);
     
     /**
-     * Verify phone number after OTP verification
+     * Verify email after OTP verification
      */
-    void verifyPhone(String phone);
+    void verifyEmail(String email);
 
     void changePassword(ChangePasswordRequest request);
 

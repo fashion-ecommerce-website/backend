@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -106,14 +107,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getUserRoles().add(userRoleEntity);
                 userRepository.save(user);
 
-                // Send OTP to phone number
-                if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
-                        try {
-                                otpService.sendOtp(request.getPhone());
-                                log.info("OTP sent to phone: {}", request.getPhone());
-                        } catch (Exception e) {
-                                log.error("Failed to send OTP to phone {}: {}", request.getPhone(), e.getMessage());
-                        }
+                // Send OTP to email
+                try {
+                        otpService.sendOtp(request.getEmail());
+                        log.info("OTP sent to email: {}", request.getEmail());
+                } catch (Exception e) {
+                        log.error("Failed to send OTP to email {}: {}", request.getEmail(), e.getMessage());
                 }
 
                 // Generate tokens
@@ -146,9 +145,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 UserEntity user = userRepository.findActiveUserByEmail(request.getEmail())
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-                // Check if phone is verified
-                if (user.getPhone() != null && !user.getPhone().trim().isEmpty() && !user.isPhoneVerified()) {
-                        throw new ErrorException(HttpStatus.FORBIDDEN, "Phone number must be verified before login");
+                // Check if email is verified
+                if (!user.isEmailVerified()) {
+                        throw new ErrorException(HttpStatus.FORBIDDEN, "Email must be verified before login");
                 }
 
                 // Update last login
@@ -222,16 +221,18 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         token.setRevoked(true);
                         token.setRevokedAt(LocalDateTime.now());
                         refreshTokenRepository.save(token);
-                        log.info("User logged out successfully: {}", token.getUser().getEmail());
+                        log.info("User logged out successfully");
                 }
         }
 
         @Override
         @Transactional
         public void changePassword(ChangePasswordRequest request) {
-                log.info("Changing password for user: {}", request.getEmail());
+                // Get email from SecurityContext (JWT token)
+                String email = SecurityContextHolder.getContext().getAuthentication().getName();
+                log.info("Changing password for user: {}", email);
 
-                UserEntity user = userRepository.findActiveUserByEmail(request.getEmail())
+                UserEntity user = userRepository.findActiveUserByEmail(email)
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
                 if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
@@ -242,7 +243,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.setUpdatedAt(LocalDateTime.now());
                 userRepository.save(user);
 
-                log.info("Password changed successfully for user: {}", user.getEmail());
+                log.info("Password changed successfully for user: {}", email);
         }
 
         @Override
@@ -309,35 +310,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         private List<SimpleGrantedAuthority> createAuthorities(UserEntity user) {
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
-                try {
-                        if (user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-                                authorities = user.getUserRoles().stream()
-                                                .filter(userRole -> userRole != null && userRole.isActive())
-                                                .filter(userRole -> userRole.getRole() != null
-                                                                && userRole.getRole().isActive())
-                                                .map(userRole -> {
-                                                        String roleName = userRole.getRole().getRoleName();
-                                                        if (roleName != null && !roleName.trim().isEmpty()) {
-                                                                return new SimpleGrantedAuthority(
-                                                                                "ROLE_" + roleName.trim());
-                                                        }
-                                                        return null;
-                                                })
-                                                .filter(authority -> authority != null)
-                                                .collect(Collectors.toList());
-                        }
-
-                        // Add default USER role if no roles found
-                        if (authorities.isEmpty()) {
-                                log.warn("No valid roles found for user {}, adding default USER role", user.getEmail());
-                                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                        }
-
-                } catch (Exception e) {
-                        log.error("Error creating authorities for user {}: {}", user.getEmail(), e.getMessage(), e);
-                        // Add default USER role as fallback
-                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                }
+                // Simply add default USER role to avoid LazyInitializationException
+                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                
+                log.info("Created authorities for user {}: {}", user.getEmail(), authorities);
 
                 return authorities;
         }
@@ -364,15 +340,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         @Override
         @Transactional
-        public void verifyPhone(String phone) {
-                log.info("Verifying phone number: {}", phone);
+        public void verifyEmail(String email) {
+                log.info("Verifying email: {}", email);
                 
-                UserEntity user = userRepository.findByPhone(phone)
+                UserEntity user = userRepository.findByEmail(email)
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
                 
-                user.setPhoneVerified(true);
+                user.setEmailVerified(true);
                 userRepository.save(user);
                 
-                log.info("Phone verified successfully for user: {}", user.getEmail());
+                log.info("Email verified successfully for user: {}", user.getEmail());
         }
 }

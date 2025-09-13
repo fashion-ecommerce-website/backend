@@ -68,34 +68,34 @@ public class AuthenticationController {
 
     @PostMapping("/send-otp")
     public ResponseEntity<String> sendOtp(@RequestBody Map<String, String> request) {
-        String phone = request.get("phone");
-        if (phone == null || phone.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Phone number is required");
+        String email = request.get("email");
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Email is required");
         }
         
-        otpService.sendOtp(phone);
-        return ResponseEntity.ok("OTP sent successfully");
+        otpService.sendOtp(email);
+        return ResponseEntity.ok("OTP sent successfully to email");
     }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<String> verifyOtp(@RequestBody Map<String, String> request) {
-        String phone = request.get("phone");
+        String email = request.get("email");
         String otpCode = request.get("otpCode");
         
-        if (phone == null || phone.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("Phone number is required");
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Email is required");
         }
         
         if (otpCode == null || otpCode.trim().isEmpty()) {
             return ResponseEntity.badRequest().body("OTP code is required");
         }
         
-        boolean isValid = otpService.verifyOtp(phone, otpCode);
+        boolean isValid = otpService.verifyOtp(email, otpCode);
         
         if (isValid) {
-            // Update user's phone_verified status
-            authenticationService.verifyPhone(phone);
-            return ResponseEntity.ok("Phone verified successfully");
+            // Update user's email_verified status
+            authenticationService.verifyEmail(email);
+            return ResponseEntity.ok("Email verified successfully");
         } else {
             return ResponseEntity.badRequest().body("Invalid or expired OTP");
         }

@@ -1,15 +1,8 @@
 package com.spring.fit.backend.security.service;
 
-public interface OtpService {
+public interface EmailOtpService {
     
-    /**
-     * Send OTP to email address
-     */
     void sendOtp(String email);
     
-    /**
-     * Verify OTP code
-     */
     boolean verifyOtp(String email, String otpCode);
 }
-
