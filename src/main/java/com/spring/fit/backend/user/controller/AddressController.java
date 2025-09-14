@@ -6,9 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import com.spring.fit.backend.user.domain.dto.AddressResponse;
-import com.spring.fit.backend.user.domain.dto.CreateAddressRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.CreateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.response.AddressResponse;
 import com.spring.fit.backend.user.service.AddressService;
 
 import jakarta.validation.Valid;

@@ -18,9 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.common.exception.ErrorException;
-import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateUserStatusRequest;
-import com.spring.fit.backend.user.domain.dto.UserResponse;
+import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateUserStatusRequest;
+import com.spring.fit.backend.user.domain.dto.response.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
 import lombok.RequiredArgsConstructor;

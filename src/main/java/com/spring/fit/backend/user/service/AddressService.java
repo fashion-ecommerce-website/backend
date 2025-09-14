@@ -2,9 +2,9 @@ package com.spring.fit.backend.user.service;
 
 import java.util.List;
 
-import com.spring.fit.backend.user.domain.dto.AddressResponse;
-import com.spring.fit.backend.user.domain.dto.CreateAddressRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.CreateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.response.AddressResponse;
 
 public interface AddressService {
 

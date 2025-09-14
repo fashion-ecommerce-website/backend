@@ -1,4 +1,4 @@
-package com.spring.fit.backend.user.domain.dto;
+package com.spring.fit.backend.user.domain.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;

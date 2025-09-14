@@ -1,7 +1,8 @@
-package com.spring.fit.backend.user.domain.dto;
+package com.spring.fit.backend.user.domain.dto.response;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.spring.fit.backend.user.domain.entity.AddressEntity;
 
 import lombok.AllArgsConstructor;
@@ -24,7 +25,10 @@ public class AddressResponse {
     private String city;
     private String countryCode;
     private String postalCode;
+    
+    @JsonProperty("isDefault")
     private boolean isDefault;
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

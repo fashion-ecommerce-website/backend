@@ -1,5 +1,6 @@
-package com.spring.fit.backend.user.domain.dto;
+package com.spring.fit.backend.user.domain.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,5 +28,6 @@ public class UpdateAddressRequest {
 
     private String postalCode;
 
+    @JsonProperty("isDefault")
     private Boolean isDefault;
 }

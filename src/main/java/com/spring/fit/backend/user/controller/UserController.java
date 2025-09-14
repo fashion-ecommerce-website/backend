@@ -5,10 +5,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import com.spring.fit.backend.user.domain.dto.RemoveRecentProductsRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateUserStatusRequest;
-import com.spring.fit.backend.user.domain.dto.UserResponse;
+import com.spring.fit.backend.user.domain.dto.request.RemoveRecentProductsRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateUserStatusRequest;
+import com.spring.fit.backend.user.domain.dto.response.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
 import jakarta.validation.Valid;

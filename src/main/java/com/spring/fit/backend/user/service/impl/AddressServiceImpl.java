@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
-import com.spring.fit.backend.user.domain.dto.AddressResponse;
-import com.spring.fit.backend.user.domain.dto.CreateAddressRequest;
-import com.spring.fit.backend.user.domain.dto.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.CreateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.request.UpdateAddressRequest;
+import com.spring.fit.backend.user.domain.dto.response.AddressResponse;
 import com.spring.fit.backend.user.domain.entity.AddressEntity;
 import com.spring.fit.backend.user.repository.AddressRepository;
 import com.spring.fit.backend.user.service.AddressService;
@@ -31,11 +31,17 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     public AddressResponse createAddress(String userEmail, CreateAddressRequest request) {
-        log.info("Creating address for user: {}", userEmail);
+        log.info("Request: {}", request);
 
         // Find user
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+
+        // If this address is set as default, unset other default addresses first
+        if (request.isDefault()) {
+            log.info("Setting address as default, unsetting other default addresses for user: {}", userEmail);
+            unsetOtherDefaultAddresses(user.getId());
+        }
 
         // Create address entity
         AddressEntity address = AddressEntity.builder()
@@ -49,13 +55,11 @@ public class AddressServiceImpl implements AddressService {
                 .isDefault(request.isDefault())
                 .build();
 
-        // If this address is set as default, unset other default addresses
-        if (request.isDefault()) {
-            unsetOtherDefaultAddresses(user.getId());
-        }
-
+        log.info("Created address entity with isDefault: {} for user: {}", address.isDefault(), userEmail);
+        
         AddressEntity savedAddress = addressRepository.save(address);
-        log.info("Address created with ID: {} for user: {}", savedAddress.getId(), userEmail);
+        log.info("Address created with ID: {} and isDefault: {} for user: {}", 
+                savedAddress.getId(), savedAddress.isDefault(), userEmail);
 
         return AddressResponse.fromEntity(savedAddress);
     }

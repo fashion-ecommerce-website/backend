@@ -1,5 +1,6 @@
-package com.spring.fit.backend.user.domain.dto;
+package com.spring.fit.backend.user.domain.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,5 +33,6 @@ public class CreateAddressRequest {
 
     private String postalCode;
 
+    @JsonProperty("isDefault")
     private boolean isDefault;
 }
