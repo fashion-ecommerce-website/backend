@@ -17,24 +17,29 @@ public class CategoryResponse {
     private Long id;
     private String name;
     private String slug;
-    private String status;
+    private Boolean isActive;
     private List<CategoryResponse> children;
 
     // Map tất cả category sang DTO phẳng
     public static Map<Long, CategoryResponse> mapAll(List<Category> categories) {
         Map<Long, CategoryResponse> map = new HashMap<>();
         for (Category c : categories) {
-            map.put(c.getId(), new CategoryResponse(c.getId(), c.getName(), c.getSlug(),c.getStatus(), new ArrayList<>()));
+            map.put(c.getId(), new CategoryResponse(c.getId(), c.getName(), c.getSlug(),c.getIsActive(), new ArrayList<>()));
         }
         return map;
     }
 
     // Build cây từ rootId
     public static CategoryResponse buildTree(Long rootId, List<Category> allCategories) {
-        Map<Long, CategoryResponse> map = mapAll(allCategories);
+        // ✅ Lọc chỉ các category active
+        List<Category> activeCategories = allCategories.stream()
+                .filter(Category::getIsActive)
+                .collect(Collectors.toList());
 
-        for (Category c : allCategories) {
-            if (c.getParent() != null) {
+        Map<Long, CategoryResponse> map = mapAll(activeCategories);
+
+        for (Category c : activeCategories) {
+            if (c.getParent() != null && c.getParent().getIsActive()) {
                 CategoryResponse parentDto = map.get(c.getParent().getId());
                 if (parentDto != null) {
                     parentDto.getChildren().add(map.get(c.getId()));
@@ -51,10 +56,14 @@ public class CategoryResponse {
 
     // Build cây cho tất cả root
     public static List<CategoryResponse> buildTree(List<Category> allCategories) {
-        Map<Long, CategoryResponse> map = mapAll(allCategories);
+        List<Category> activeCategories = allCategories.stream()
+                .filter(Category::getIsActive)
+                .collect(Collectors.toList());
 
-        for (Category c : allCategories) {
-            if (c.getParent() != null) {
+        Map<Long, CategoryResponse> map = mapAll(activeCategories);
+
+        for (Category c : activeCategories) {
+            if (c.getParent() != null && c.getParent().getIsActive()) {
                 CategoryResponse parentDto = map.get(c.getParent().getId());
                 if (parentDto != null) {
                     parentDto.getChildren().add(map.get(c.getId()));
@@ -62,7 +71,7 @@ public class CategoryResponse {
             }
         }
 
-        List<CategoryResponse> roots = allCategories.stream()
+        List<CategoryResponse> roots = activeCategories.stream()
                 .filter(c -> c.getParent() == null)
                 .map(c -> map.get(c.getId()))
                 .collect(Collectors.toList());
@@ -70,6 +79,7 @@ public class CategoryResponse {
         roots.forEach(CategoryResponse::setEmptyChildrenToNull);
         return roots;
     }
+
 
     private static void setEmptyChildrenToNull(CategoryResponse node) {
         if (node.getChildren() == null || node.getChildren().isEmpty()) {

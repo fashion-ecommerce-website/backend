@@ -49,4 +49,10 @@ public class CategoryController {
         return ResponseEntity.ok(updated);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> changeCategoryStatus(@PathVariable Long id) {
+        categoryService.toggleCategoryStatus(id);
+        return ResponseEntity.noContent().build(); // HTTP 204
+    }
+
 }

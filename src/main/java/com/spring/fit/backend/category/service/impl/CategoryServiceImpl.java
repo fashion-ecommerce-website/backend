@@ -54,7 +54,7 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = new Category();
         category.setName(request.getName().trim());
         category.setSlug(request.getSlug().trim());
-
+        category.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
         if (request.getParentId() != null) {
             Category parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Parent category not found"));
@@ -62,7 +62,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category saved = categoryRepository.save(category);
-        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(),saved.getStatus(), null);
+        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(),saved.getIsActive(), null);
     }
 
     @Override
@@ -85,17 +85,12 @@ public class CategoryServiceImpl implements CategoryService {
             category.setParent(null);
         }
 
-        // Validate status
-        if (request.getStatus() != null) {
-            String status = request.getStatus().trim().toLowerCase();
-            if (!status.equals("active") && !status.equals("inactive")) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, "Status must be 'active' or 'inactive'");
-            }
-            category.setStatus(status);
+        if (request.getIsActive() != null) {
+            category.setIsActive(request.getIsActive());
         }
 
         Category updated = categoryRepository.save(category);
-        return new CategoryResponse(updated.getId(), updated.getName(), updated.getSlug(), updated.getStatus(), null);
+        return new CategoryResponse(updated.getId(), updated.getName(), updated.getSlug(), updated.getIsActive(), null);
     }
 
 
@@ -107,9 +102,17 @@ public class CategoryServiceImpl implements CategoryService {
                         c.getId(),
                         c.getName(),
                         c.getSlug(),
-                        c.getStatus(),
-                        null // Không build tree, trả về phẳng
+                        c.getIsActive(),
+                        null
                 ))
                 .toList();
+    }
+
+    @Override
+    public void toggleCategoryStatus(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
+        category.setIsActive(!category.getIsActive());
+        Category updated = categoryRepository.save(category);
     }
 }

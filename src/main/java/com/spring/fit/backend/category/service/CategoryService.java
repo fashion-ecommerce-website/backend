@@ -16,4 +16,6 @@ public interface CategoryService {
 
     CategoryResponse updateCategory(Long id, CategoryRequest request);
 
+    void toggleCategoryStatus(Long id);
+
 }

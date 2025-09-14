@@ -16,9 +16,10 @@ public class CategoryRequest {
     @NotBlank(message = "Slug is required")
     @Size(max = 255, message = "Slug must be at most 255 characters")
     private String slug;
-    @NotBlank(message = "Slug is required")
-    @Pattern(regexp = "active|inactive", message = "Status must be 'active' or 'inactive'")
-    private String status;
-    private Long parentId;    // id của category cha (nếu có)
+
+    @NotBlank(message = "Status is required")
+    private Boolean isActive;
+
+    private Long parentId;
 
 }
