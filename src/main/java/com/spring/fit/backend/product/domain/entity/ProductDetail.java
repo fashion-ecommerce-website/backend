@@ -2,11 +2,13 @@ package com.spring.fit.backend.product.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -16,7 +18,8 @@ import java.util.Set;
                 @UniqueConstraint(columnNames = {"product_id", "color_id", "size_id"})
         }
 )
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ProductDetail {
@@ -55,4 +58,17 @@ public class ProductDetail {
 
     @OneToMany(mappedBy = "detail", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ProductImage> productImages;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ProductDetail that = (ProductDetail) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
