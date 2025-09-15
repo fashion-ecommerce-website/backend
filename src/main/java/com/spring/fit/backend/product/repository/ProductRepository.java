@@ -22,11 +22,11 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
                  p.title AS product_title,
                  c.name  AS color_name
           FROM product_details d
-          JOIN products p ON p.id = d.product_id
+          JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
           JOIN colors   c ON c.id = d.color_id
           JOIN sizes    s ON s.id = d.size_id
           JOIN product_categories pc ON pc.product_id = p.id
-          JOIN categories cat ON cat.id = pc.category_id
+          JOIN categories cat ON cat.id = pc.category_id AND cat.is_active = TRUE
           WHERE d.is_active = TRUE
             AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
             AND (:colorsEmpty = TRUE OR c.name IN (:colors))
@@ -86,11 +86,11 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
     WITH filtered AS (
       SELECT d.product_id, d.color_id
       FROM product_details d
-      JOIN products p ON p.id = d.product_id
+      JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
       JOIN colors   c ON c.id = d.color_id
       JOIN sizes    s ON s.id = d.size_id
       JOIN product_categories pc ON pc.product_id = p.id
-      JOIN categories cat ON cat.id = pc.category_id
+      JOIN categories cat ON cat.id = pc.category_id AND cat.is_active = TRUE
       WHERE d.is_active = TRUE
         AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
         AND (:colorsEmpty = TRUE OR c.name IN (:colors))
@@ -125,11 +125,11 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
                  p.title AS product_title,
                  c.name  AS color_name
           FROM product_details d
-          JOIN products p ON p.id = d.product_id
+          JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
           JOIN colors   c ON c.id = d.color_id
           JOIN sizes    s ON s.id = d.size_id
           JOIN product_categories pc ON pc.product_id = p.id
-          JOIN categories cat ON cat.id = pc.category_id
+          JOIN categories cat ON cat.id = pc.category_id AND cat.is_active = TRUE
           WHERE d.is_active = TRUE AND d.id IN (:ids)
         )
         , one_per_color AS (

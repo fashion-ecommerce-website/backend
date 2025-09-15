@@ -7,6 +7,7 @@ import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
 import com.spring.fit.backend.product.domain.entity.*;
 import com.spring.fit.backend.product.repository.ProductRepository;
 import com.spring.fit.backend.product.service.ProductService;
+import com.spring.fit.backend.user.service.RecentViewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productDetailRepository;
+    private final RecentViewService recentViewService;
     
     private static final Map<String, BigDecimal[]> PRICE_BUCKET_MAP = Map.of(
             "<1m", new BigDecimal[]{null, BigDecimal.valueOf(1_000_000)},
@@ -152,7 +154,7 @@ public class ProductServiceImpl implements ProductService {
     }
     
     @Override
-    public List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds) {
+    public List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId) {
         if (productIds == null || productIds.isEmpty()) {
             return List.of();
         }
@@ -166,6 +168,18 @@ public class ProductServiceImpl implements ProductService {
                     .toList();
             
             List<ProductCardView> products = productDetailRepository.findRecentlyViewedProduct(integerIds);
+
+            // Lấy ra danh sách detailId đã có trong products
+            Set<Long> existingDetailIds = products.stream()
+                    .map(ProductCardView::getDetailId)
+                    .collect(Collectors.toSet());
+
+            List<Long> duplicateProductColors = productIds.stream()
+                    .filter(id -> !existingDetailIds.contains(id))
+                    .toList();
+
+            recentViewService.removeSelected(userId, duplicateProductColors);
+
             log.debug("Found {} recently viewed products", products.size());
             
             return products;

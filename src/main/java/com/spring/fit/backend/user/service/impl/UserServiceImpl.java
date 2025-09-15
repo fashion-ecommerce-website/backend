@@ -171,7 +171,7 @@ public class UserServiceImpl implements UserService {
                 return List.of();
             }
             
-            List<ProductCardView> recentProducts = productService.getRecentlyViewedProducts(recentProductIds);
+            List<ProductCardView> recentProducts = productService.getRecentlyViewedProducts(recentProductIds, user.getId());
 
             // Danh sách đã sắp xếp theo thứ tự "viewed"
             Map<Long, ProductCardView> byId =

@@ -17,9 +17,9 @@ public interface ProductService {
             int page,
             int pageSize);
     
-    List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds);
-    
     ProductDetailResponse getProductDetailById(Long detailId);
 
     ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor);
+
+    List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId);
 }
