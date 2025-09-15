@@ -16,5 +16,5 @@ public interface ProductService {
             int page,
             int pageSize);
     
-    List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds);
+    List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId);
 }
