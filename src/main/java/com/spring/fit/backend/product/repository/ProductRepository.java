@@ -1,6 +1,7 @@
 package com.spring.fit.backend.product.repository;
 
 import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.SizeQuantityView;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.repository.*;
@@ -173,5 +174,57 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
         nativeQuery = true
     )
     List<ProductCardView> findRecentlyViewedProduct(@Param("ids") List<Integer> id);
+
+
+    @Query(value = """
+        SELECT DISTINCT c.name
+        FROM product_details d
+        JOIN colors c ON c.id = d.color_id
+        WHERE d.product_id = (
+            SELECT pd.product_id FROM product_details pd WHERE pd.id = :detailId
+        )
+          AND d.is_active = TRUE
+        ORDER BY c.name
+        """, nativeQuery = true)
+    List<String> findAllColorsByDetailId(@Param("detailId") Long detailId);
+
+    @Query(value = """
+        SELECT s.code AS sizeCode, COALESCE(d.quantity, 0) AS quantity
+        FROM product_details d
+        JOIN sizes s ON s.id = d.size_id
+        WHERE d.product_id = (
+            SELECT pd.product_id FROM product_details pd WHERE pd.id = :detailId
+        )
+          AND d.color_id = (
+            SELECT pd.color_id FROM product_details pd WHERE pd.id = :detailId
+          )
+          AND d.is_active = TRUE
+        ORDER BY s.code
+        """, nativeQuery = true)
+    List<SizeQuantityView> findSizeQuantityByDetailId(@Param("detailId") Long detailId);
+
+    @Query(value = """
+        SELECT i.url
+        FROM product_images pi
+        JOIN images i ON i.id = pi.image_id
+        WHERE pi.detail_id = :detailId
+        ORDER BY pi.created_at
+        """, nativeQuery = true)
+    List<String> findImageUrlsByDetailId(@Param("detailId") Long detailId);
+
+    @Query(value = """
+        SELECT d.id
+        FROM product_details d
+        WHERE d.product_id = (
+            SELECT pd.product_id FROM product_details pd WHERE pd.id = :baseDetailId
+        )
+          AND d.color_id = (
+            SELECT c.id FROM colors c WHERE LOWER(c.name) = LOWER(:colorName)
+          )
+          AND d.is_active = TRUE
+        ORDER BY d.price ASC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<Long> findDetailIdForColor(@Param("baseDetailId") Long baseDetailId, @Param("colorName") String colorName);
 
 }

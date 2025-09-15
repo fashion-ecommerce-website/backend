@@ -1,7 +1,10 @@
 package com.spring.fit.backend.product.service.impl;
 
+import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
+import com.spring.fit.backend.product.domain.entity.*;
 import com.spring.fit.backend.product.repository.ProductRepository;
 import com.spring.fit.backend.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -169,6 +174,97 @@ public class ProductServiceImpl implements ProductService {
             log.error("Error getting recently viewed products: {}", e.getMessage(), e);
             throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây", e);
         }
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getProductDetailById(Long detailId) {
+        log.info("Getting product detail by ID: {}", detailId);
+        
+        if (detailId == null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Detail ID cannot be null");
+        }
+        
+        try {
+            // 1. Tìm ProductDetail theo ID
+            ProductDetail productDetail = productDetailRepository.findById(detailId)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
+            
+            log.debug("Found product detail: {}", productDetail.getId());
+            
+            // 2. Lấy Product từ ProductDetail
+            Product product = productDetail.getProduct();
+            if (product == null) {
+                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Product not found for detail ID: " + detailId);
+            }
+            
+            log.info("Product id={}, title={}", product.getId(), product.getTitle());
+            // 3. Lấy activeColor từ ProductDetail
+            String activeColor = productDetail.getColor().getName();
+            log.info("Active color: {}", activeColor);
+            // 4. Lấy tất cả colors của product này (native query để tránh lazy load)
+            List<String> colorList = productDetailRepository.findAllColorsByDetailId(detailId);
+            Set<String> allColors = new LinkedHashSet<>(colorList);
+            
+            log.info("All colors: {}", allColors);
+            // 5. Lấy images của ProductDetail hiện tại (native query)
+            List<String> images = productDetailRepository.findImageUrlsByDetailId(detailId);
+            
+            log.info("Images: {}", images);
+            // 6. Lấy mapSizeToQuantity từ ProductDetail của cùng product và color (native query)
+            Map<String, Integer> mapSizeToQuantity = productDetailRepository.findSizeQuantityByDetailId(detailId)
+                    .stream()
+                    .collect(Collectors.toMap(
+                            v -> v.getSizeCode(),
+                            v -> v.getQuantity() != null ? v.getQuantity() : 0,
+                            (existing, replacement) -> existing,
+                            LinkedHashMap::new
+                    ));
+            
+            log.info("Map size to quantity: {}", mapSizeToQuantity);
+            // 7. Parse description từ String thành List<String>
+            List<String> descriptionList = new ArrayList<>();
+            if (StringUtils.hasText(product.getDescription())) {
+                // Split by newline hoặc semicolon và trim
+                descriptionList = Arrays.stream(product.getDescription().split("[;\n]"))
+                        .map(String::trim)
+                        .filter(StringUtils::hasText)
+                        .collect(Collectors.toList());
+            }
+            log.info("Description list: {}", descriptionList);
+            // 8. Build response
+            ProductDetailResponse response = ProductDetailResponse.builder()
+                    .detailId(detailId)
+                    .title(product.getTitle())
+                    .price(productDetail.getPrice())
+                    .activeColor(activeColor)
+                    .images(images)
+                    .colors(new ArrayList<>(allColors))
+                    .mapSizeToQuantity(mapSizeToQuantity)
+                    .description(descriptionList)
+                    .build();
+            
+            log.info("Successfully built product detail response for ID: {}", detailId);
+            return response;
+            
+        } catch (ErrorException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error getting product detail by ID {}: {}", detailId, e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lấy chi tiết sản phẩm", e);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor) {
+        log.info("Getting product detail by color. baseDetailId={}, color={}", baseDetailId, activeColor);
+        if (baseDetailId == null || !StringUtils.hasText(activeColor)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "baseDetailId and activeColor are required");
+        }
+        Long resolvedDetailId = productDetailRepository.findDetailIdForColor(baseDetailId, activeColor)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "No detail found for color: " + activeColor));
+        return getProductDetailById(resolvedDetailId);
     }
     
     // Records cho better type safety và immutability

@@ -2,6 +2,7 @@ package com.spring.fit.backend.product.service;
 
 import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
 
 import java.util.List;
 
@@ -17,4 +18,8 @@ public interface ProductService {
             int pageSize);
     
     List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds);
+    
+    ProductDetailResponse getProductDetailById(Long detailId);
+
+    ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor);
 }

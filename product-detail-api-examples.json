@@ -1,0 +1,235 @@
+{
+  "api_info": {
+    "endpoint": "GET /api/products/{detailId}",
+    "description": "Lấy chi tiết sản phẩm theo detailId",
+    "authentication": "JWT Token trong header",
+    "path_parameter": "detailId (Long) - ID của ProductDetail"
+  },
+  
+  "sample_request": {
+    "method": "GET",
+    "url": "/api/products/1",
+    "headers": {
+      "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "Content-Type": "application/json"
+    }
+  },
+  
+  "sample_response": {
+    "detailId": 1,
+    "title": "Áo thun nam cổ tròn chất liệu cotton 100%",
+    "price": 299000,
+    "activeColor": "đen",
+    "images": [
+      "https://example.com/images/product-1-black-front.jpg",
+      "https://example.com/images/product-1-black-back.jpg",
+      "https://example.com/images/product-1-black-side.jpg"
+    ],
+    "colors": ["đen", "trắng", "xám"],
+    "mapSizeToQuantity": {
+      "S": 10,
+      "M": 15,
+      "L": 8,
+      "XL": 5,
+      "XXL": 2
+    },
+    "description": [
+      "Logo cỡ lớn in sau lưng với hiệu ứng graffiti bụi bặm",
+      "Kiểu dáng áo thun cổ tròn phom suông",
+      "Chất liệu cotton 100% mềm mại, thoáng mát",
+      "Phù hợp mặc hàng ngày, đi chơi, thể thao"
+    ]
+  },
+  
+  "alternative_response_examples": {
+    "example_2": {
+      "detailId": 5,
+      "title": "Quần jeans nam ống suông",
+      "price": 899000,
+      "activeColor": "xanh đậm",
+      "images": [
+        "https://example.com/images/jeans-dark-blue-front.jpg",
+        "https://example.com/images/jeans-dark-blue-back.jpg"
+      ],
+      "colors": ["xanh đậm", "đen"],
+      "mapSizeToQuantity": {
+        "28": 3,
+        "30": 7,
+        "32": 12,
+        "34": 8,
+        "36": 4
+      },
+      "description": [
+        "Quần jeans nam ống suông thoải mái",
+        "Chất liệu denim cao cấp bền đẹp",
+        "Thiết kế tối giản, dễ phối đồ"
+      ]
+    },
+    
+    "example_3": {
+      "detailId": 10,
+      "title": "Áo khoác hoodie nam có mũ",
+      "price": 1299000,
+      "activeColor": "trắng",
+      "images": [
+        "https://example.com/images/hoodie-white-front.jpg",
+        "https://example.com/images/hoodie-white-back.jpg",
+        "https://example.com/images/hoodie-white-detail.jpg"
+      ],
+      "colors": ["trắng", "đen", "xám"],
+      "mapSizeToQuantity": {
+        "M": 6,
+        "L": 10,
+        "XL": 7,
+        "XXL": 3
+      },
+      "description": [
+        "Áo khoác hoodie có mũ trùm đầu",
+        "Chất liệu nỉ cotton ấm áp",
+        "Túi kangaroo tiện lợi",
+        "Phù hợp mặc mùa thu đông"
+      ]
+    }
+  },
+  
+  "error_responses": {
+    "404_not_found": {
+      "status": 404,
+      "error": "Product detail not found with ID: 999"
+    },
+    
+    "400_bad_request": {
+      "status": 400,
+      "error": "Detail ID cannot be null"
+    },
+    
+    "400_invalid_id": {
+      "status": 400,
+      "error": "Detail ID must be positive"
+    },
+    
+    "500_internal_server_error": {
+      "status": 500,
+      "error": "Lỗi khi lấy chi tiết sản phẩm"
+    }
+  },
+  
+  "curl_examples": {
+    "basic_request": "curl -X GET 'http://localhost:8080/api/products/1' -H 'Authorization: Bearer YOUR_JWT_TOKEN' -H 'Content-Type: application/json'",
+    
+    "with_verbose_output": "curl -X GET 'http://localhost:8080/api/products/1' -H 'Authorization: Bearer YOUR_JWT_TOKEN' -H 'Content-Type: application/json' -v"
+  },
+  
+  "testing_scenarios": {
+    "valid_detail_id": {
+      "description": "Test với detailId hợp lệ",
+      "detailId": 1,
+      "expected_status": 200,
+      "expected_fields": ["detailId", "title", "price", "activeColor", "images", "colors", "mapSizeToQuantity", "description"]
+    },
+    
+    "invalid_detail_id": {
+      "description": "Test với detailId không tồn tại",
+      "detailId": 999999,
+      "expected_status": 404,
+      "expected_error": "Product detail not found"
+    },
+    
+    "negative_detail_id": {
+      "description": "Test với detailId âm",
+      "detailId": -1,
+      "expected_status": 400,
+      "expected_error": "Detail ID must be positive"
+    },
+    
+    "null_detail_id": {
+      "description": "Test với detailId null",
+      "detailId": null,
+      "expected_status": 400,
+      "expected_error": "Detail ID cannot be null"
+    }
+  },
+  
+  "business_logic_notes": {
+    "implementation": "Sử dụng Java Streams với JPA/Hibernate",
+    "approach": "Multiple queries + Java streams processing cho flexibility và maintainability",
+    "active_color": "Lấy từ color của ProductDetail được truyền vào",
+    "all_colors": "Lấy tất cả colors có trong product (từ các ProductDetail khác nhau)",
+    "images": "Lấy tất cả images của ProductDetail hiện tại",
+    "size_quantity_map": "Lấy quantity của tất cả sizes cùng color với activeColor",
+    "description": "Parse description từ String thành List<String> (split by semicolon hoặc newline)",
+    "price": "Lấy price từ ProductDetail hiện tại (không phải từ Product)",
+    "title": "Lấy title từ Product",
+    "advantages": "Dễ đọc, dễ maintain, leverage JPA lazy loading và caching"
+  },
+  
+  "database_relationships": {
+    "ProductDetail": {
+      "id": "Primary key",
+      "product_id": "Foreign key to Product",
+      "color_id": "Foreign key to Color",
+      "size_id": "Foreign key to Size",
+      "price": "Price của variant này",
+      "quantity": "Số lượng tồn kho"
+    },
+    "Product": {
+      "id": "Primary key",
+      "title": "Tên sản phẩm",
+      "description": "Mô tả sản phẩm (String)",
+      "details": "One-to-Many với ProductDetail"
+    },
+    "Color": {
+      "id": "Primary key",
+      "name": "Tên màu (ví dụ: 'đen', 'trắng')"
+    },
+    "Size": {
+      "id": "Primary key",
+      "code": "Mã size (ví dụ: 'S', 'M', 'L')",
+      "label": "Tên hiển thị size"
+    },
+    "ProductImage": {
+      "detail_id": "Foreign key to ProductDetail",
+      "image_id": "Foreign key to Image",
+      "created_at": "Thời gian tạo"
+    },
+    "Image": {
+      "id": "Primary key",
+      "url": "URL của hình ảnh"
+    }
+  },
+  
+  "java_streams_implementation": {
+    "approach": "Java Streams với JPA/Hibernate",
+    "processing_steps": [
+      "1. Tìm ProductDetail theo ID",
+      "2. Lấy Product từ ProductDetail (lazy loading)",
+      "3. Lấy activeColor từ ProductDetail.getColor()",
+      "4. Stream qua product.getDetails() để lấy all colors",
+      "5. Stream qua productDetail.getProductImages() để lấy images",
+      "6. Stream qua product.getDetails() để build mapSizeToQuantity",
+      "7. Parse description từ String thành List<String>"
+    ],
+    "java_features_used": [
+      "Stream API - Functional programming",
+      "Collectors.toSet() - Collect unique colors",
+      "Collectors.toList() - Collect images",
+      "Collectors.toMap() - Build size to quantity mapping",
+      "String.split() - Parse description",
+      "Optional.orElseThrow() - Error handling"
+    ],
+    "advantages": [
+      "Code dễ đọc và maintain",
+      "Leverage JPA lazy loading",
+      "Flexible business logic processing",
+      "Easy to test và debug",
+      "Type safety với Java generics",
+      "Reuse existing JPA relationships"
+    ],
+    "performance_considerations": [
+      "Sử dụng JPA second level cache nếu có",
+      "Lazy loading giúp chỉ load data cần thiết",
+      "Stream processing trong memory",
+      "Có thể optimize với @EntityGraph nếu cần"
+    ]
+  }
+}
