@@ -9,6 +9,7 @@ import com.spring.fit.backend.cart.service.CartService;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductRepository;
+import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,21 +34,24 @@ public class CartServiceImpl implements CartService {
 
     private final CartDetailRepository cartDetailRepository;
     private final ProductRepository productRepository;
+    private final ProductDetailRepository productDetailRepository;
     private final UserRepository userRepository;
 
     @Override
     public CartDetailResponse addToCart(String userEmail, AddToCartRequest request) {
-        log.info("Adding product to cart: userEmail={}, productDetailId={}, quantity={}", 
-                userEmail, request.getProductDetailId(), request.getQuantity());
+        log.info("Adding product to cart: userEmail={}, productId={}, colorId={}, sizeId={}, quantity={}", 
+                userEmail, request.getProductId(), request.getColorId(), request.getSizeId(), request.getQuantity());
 
         try {
             // Find user
             UserEntity user = findUserByEmail(userEmail);
 
-            // Find product detail
-            ProductDetail productDetail = productRepository.findById(request.getProductDetailId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
-                        "Cannot found product with ID: " + request.getProductDetailId()));
+            // Find product detail by productId, colorId, sizeId
+            ProductDetail productDetail = productDetailRepository
+                    .findByProductAndColorAndSize(request.getProductId(), request.getColorId(), request.getSizeId())
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
+                            "Product variant not found with productId=" + request.getProductId()
+                                    + ", colorId=" + request.getColorId() + ", sizeId=" + request.getSizeId()));
 
             // Check if product detail is active
             if (!productDetail.getIsActive()) {
@@ -62,7 +66,7 @@ public class CartServiceImpl implements CartService {
 
             // Check if product already exists in cart
             Optional<CartDetail> existingCartDetail = cartDetailRepository
-                    .findByUserIdAndProductDetailId(user.getId(), request.getProductDetailId());
+                    .findByUserIdAndProductDetailId(user.getId(), productDetail.getId());
 
             CartDetail cartDetail;
             if (existingCartDetail.isPresent()) {
@@ -96,8 +100,8 @@ public class CartServiceImpl implements CartService {
             return response;
             
         } catch (Exception e) {
-            log.error("Error adding product to cart: userEmail={}, productDetailId={}, error={}", 
-                    userEmail, request.getProductDetailId(), e.getMessage(), e);
+            log.error("Error adding product to cart: userEmail={}, productId={}, colorId={}, sizeId={}, error={}", 
+                    userEmail, request.getProductId(), request.getColorId(), request.getSizeId(), e.getMessage(), e);
             throw e;
         }
     }

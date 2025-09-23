@@ -13,9 +13,17 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AddToCartRequest {
 
-    @NotNull(message = "Product detail ID cannot be null")
-    @Positive(message = "Product detail ID must be positive")
-    private Long productDetailId;
+    @NotNull(message = "Product ID cannot be null")
+    @Positive(message = "Product ID must be positive")
+    private Long productId;
+
+    @NotNull(message = "Color ID cannot be null")
+    @Positive(message = "Color ID must be positive")
+    private Short colorId;
+
+    @NotNull(message = "Size ID cannot be null")
+    @Positive(message = "Size ID must be positive")
+    private Short sizeId;
 
     @NotNull(message = "Quantity cannot be null")
     @Positive(message = "Quantity must be positive")
