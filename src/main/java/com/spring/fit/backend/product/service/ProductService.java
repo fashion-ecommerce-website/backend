@@ -23,3 +23,4 @@ public interface ProductService {
 
     List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId);
 }
+
