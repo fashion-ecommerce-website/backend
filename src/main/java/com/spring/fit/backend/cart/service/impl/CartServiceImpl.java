@@ -48,7 +48,7 @@ public class CartServiceImpl implements CartService {
 
             // Find product detail by productId, colorId, sizeId
             ProductDetail productDetail = productDetailRepository
-                    .findByProductAndColorAndSize(request.getProductId(), request.getColorId(), request.getSizeId())
+                    .findByActiveProductAndColorAndSize(request.getProductId(), request.getColorId(), request.getSizeId())
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
                             "Product variant not found with productId=" + request.getProductId()
                                     + ", colorId=" + request.getColorId() + ", sizeId=" + request.getSizeId()));

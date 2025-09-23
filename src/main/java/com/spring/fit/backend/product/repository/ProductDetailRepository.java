@@ -19,6 +19,11 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
     Optional<ProductDetail> findByProductAndColorAndSize(@Param("productId") Long productId, 
                                                          @Param("colorId") Short colorId, 
                                                          @Param("sizeId") Short sizeId);
+
+    @Query("SELECT pd FROM ProductDetail pd WHERE pd.product.id = :productId AND pd.color.id = :colorId AND pd.size.id = :sizeId AND pd.isActive = true")
+    Optional<ProductDetail> findByActiveProductAndColorAndSize(@Param("productId") Long productId,
+                                                         @Param("colorId") Short colorId,
+                                                         @Param("sizeId") Short sizeId);
     
     @Query("SELECT pd FROM ProductDetail pd WHERE pd.product.id = :productId AND pd.isActive = true")
     List<ProductDetail> findActiveDetailsByProductId(@Param("productId") Long productId);
