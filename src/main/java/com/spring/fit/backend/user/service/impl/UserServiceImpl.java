@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.service.ProductService;
 import com.spring.fit.backend.user.service.RecentViewService;
 import org.springframework.http.HttpStatus;

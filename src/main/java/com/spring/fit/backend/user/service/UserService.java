@@ -1,6 +1,6 @@
 package com.spring.fit.backend.user.service;
 
-import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
 import com.spring.fit.backend.user.domain.dto.request.UpdateUserStatusRequest;
 import com.spring.fit.backend.user.domain.dto.response.UserResponse;
