@@ -7,6 +7,7 @@ import com.spring.fit.backend.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,14 +39,14 @@ public class ProductController {
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be >= 0") @Max(value = 100, message = "Page cannot exceed 100") int page,
 
             @RequestParam(defaultValue = "12") @Min(value = 1, message = "PageSize must be >= 1") @Max(value = 100, message = "PageSize cannot exceed 100") int pageSize) {
-        log.info("Filtering products: category={}, title={}, page={}, pageSize={}",
+        log.info("Inside ProductController.getProductsByCategory category={}, title={}, page={}, pageSize={}",
                 category, title, page, pageSize);
 
         try {
             PageResult<ProductCardView> result = productDetailService.filterByCategory(
                     category, title, colors, sizes, priceBucket, sortBy, page, pageSize);
 
-            log.info("Successfully filtered products: found {} items", result.totalItems());
+            log.info("Inside ProductController.getProductsByCategory success totalItems={}", result.totalItems());
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
@@ -57,15 +58,14 @@ public class ProductController {
     @GetMapping("/{detailId}")
     public ResponseEntity<ProductDetailResponse> getProductDetailById(
             @PathVariable Long detailId) {
-        log.info("Getting product detail by ID: {}", detailId);
-
+        log.info("Inside ProductController.getProductDetailById detailId={}", detailId);
         try {
             ProductDetailResponse response = productDetailService.getProductDetailById(detailId);
-            log.info("Successfully retrieved product detail for ID: {}", detailId);
+            log.info("Inside ProductController.getProductDetailById success detailId={}", detailId);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error getting product detail by ID {}: {}", detailId, e.getMessage(), e);
+            log.error("Inside ProductController.getProductDetailById error detailId={}, message={}", detailId, e.getMessage(), e);
             throw e;
         }
     }
@@ -73,14 +73,16 @@ public class ProductController {
     @GetMapping("/{detailId}/color")
     public ResponseEntity<ProductDetailResponse> getProductDetailByColor(
             @PathVariable Long detailId,
-            @RequestParam("activeColor") String activeColor) {
-        log.info("Getting product detail by color: baseDetailId={}, activeColor={}", detailId, activeColor);
+            @RequestParam("activeColor") String activeColor,
+            @RequestParam(value = "activeSize", required = false) String activeSize) {
+        log.info("Inside ProductController.getProductDetailByColor baseDetailId={}, activeColor={}, activeSize={}", detailId, activeColor, activeSize);
         try {
-            ProductDetailResponse response = productDetailService.getProductDetailByColor(detailId, activeColor);
+            ProductDetailResponse response = StringUtils.hasText(activeSize)
+                    ? productDetailService.getProductDetailByColorAndSize(detailId, activeColor, activeSize)
+                    : productDetailService.getProductDetailByColor(detailId, activeColor);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error getting product detail by color. detailId={}, color={}, error={}", detailId, activeColor,
-                    e.getMessage(), e);
+            log.error("Inside ProductController.getProductDetailByColor error baseDetailId={}, activeColor={}, activeSize={}, message={}", detailId, activeColor, activeSize, e.getMessage(), e);
             throw e;
         }
     }

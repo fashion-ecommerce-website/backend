@@ -37,7 +37,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartDetailResponse addToCart(String userEmail, AddToCartRequest request) {
-        log.info("Adding product to cart: userEmail={}, productDetailId={}, quantity={}", 
+        log.info("Inside CartServiceImpl.addToCart userEmail={}, productDetailId={}, quantity={}", 
                 userEmail, request.getProductDetailId(), request.getQuantity());
 
         try {
@@ -77,7 +77,7 @@ public class CartServiceImpl implements CartService {
                 }
                 
                 cartDetail.setQuantity(newQuantity);
-                log.debug("Updated existing cart item: cartDetailId={}, newQuantity={}", cartDetail.getId(), newQuantity);
+                log.debug("Inside CartServiceImpl.addToCart updatedExisting cartDetailId={}, newQuantity={}", cartDetail.getId(), newQuantity);
             } else {
                 // If not exists, create new
                 cartDetail = CartDetail.builder()
@@ -85,18 +85,18 @@ public class CartServiceImpl implements CartService {
                         .productDetail(productDetail)
                         .quantity(request.getQuantity())
                         .build();
-                log.debug("Created new cart item for user={}, productDetail={}, quantity={}", user.getId(), cartDetail.getProductDetail().getId(), cartDetail.getQuantity());
+                log.debug("Inside CartServiceImpl.addToCart createdNew userId={}, productDetailId={}, quantity={}", user.getId(), cartDetail.getProductDetail().getId(), cartDetail.getQuantity());
             }
 
             cartDetail = cartDetailRepository.save(cartDetail);
             
             CartDetailResponse response = CartDetailResponse.fromEntity(cartDetail);
-            log.info("Successfully added product to cart: cartDetailId={}", cartDetail.getId());
+            log.info("Inside CartServiceImpl.addToCart success cartDetailId={}", cartDetail.getId());
             
             return response;
             
         } catch (Exception e) {
-            log.error("Error adding product to cart: userEmail={}, productDetailId={}, error={}", 
+            log.error("Inside CartServiceImpl.addToCart error userEmail={}, productDetailId={}, message={}", 
                     userEmail, request.getProductDetailId(), e.getMessage(), e);
             throw e;
         }
@@ -105,7 +105,7 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional(readOnly = true)
     public List<CartDetailResponse> getCartItems(String userEmail) {
-        log.info("Getting cart items for user: {}", userEmail);
+        log.info("Inside CartServiceImpl.getCartItems userEmail={}", userEmail);
 
         try {
             UserEntity user = findUserByEmail(userEmail);
@@ -115,18 +115,18 @@ public class CartServiceImpl implements CartService {
                     .map(CartDetailResponse::fromEntity)
                     .collect(Collectors.toList());
 
-            log.info("Successfully retrieved cart items: userEmail={}, itemCount={}", userEmail, response.size());
+            log.info("Inside CartServiceImpl.getCartItems success userEmail={}, itemCount={}", userEmail, response.size());
             return response;
             
         } catch (Exception e) {
-            log.error("Error getting cart items: userEmail={}, error={}", userEmail, e.getMessage(), e);
+            log.error("Inside CartServiceImpl.getCartItems error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }
 
     @Override
     public CartDetailResponse updateCartItem(String userEmail, UpdateCartItemRequest request) {
-        log.info("Updating cart item with product change: userEmail={}, cartDetailId={}, newProductDetailId={}, quantity={}", 
+        log.info("Inside CartServiceImpl.updateCartItem userEmail={}, cartDetailId={}, newProductDetailId={}, quantity={}", 
                 userEmail, request.getCartDetailId(), request.getNewProductDetailId(), request.getQuantity());
 
         try {
@@ -146,7 +146,7 @@ public class CartServiceImpl implements CartService {
             };
             
         } catch (Exception e) {
-            log.error("Error updating cart item with product change: userEmail={}, cartDetailId={}, error={}", 
+            log.error("Inside CartServiceImpl.updateCartItem error userEmail={}, cartDetailId={}, message={}", 
                     userEmail, request.getCartDetailId(), e.getMessage(), e);
             throw e;
         }
@@ -154,7 +154,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void removeFromCart(String userEmail, Long cartDetailId) {
-        log.info("Removing item from cart: userEmail={}, cartDetailId={}", userEmail, cartDetailId);
+        log.info("Inside CartServiceImpl.removeFromCart userEmail={}, cartDetailId={}", userEmail, cartDetailId);
 
         try {
             UserEntity user = findUserByEmail(userEmail);
@@ -165,10 +165,10 @@ public class CartServiceImpl implements CartService {
                         "Cart item not found or you don't have permission to access"));
 
             cartDetailRepository.delete(cartDetail);
-            log.info("Successfully removed item from cart: cartDetailId={}", cartDetailId);
+            log.info("Inside CartServiceImpl.removeFromCart success cartDetailId={}", cartDetailId);
             
         } catch (Exception e) {
-            log.error("Error removing item from cart: userEmail={}, cartDetailId={}, error={}", 
+            log.error("Inside CartServiceImpl.removeFromCart error userEmail={}, cartDetailId={}, message={}", 
                     userEmail, cartDetailId, e.getMessage(), e);
             throw e;
         }
@@ -176,7 +176,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void removeMultipleFromCart(String userEmail, List<Long> cartDetailIds) {
-        log.info("Removing multiple items from cart: userEmail={}, itemCount={}", userEmail, cartDetailIds.size());
+        log.info("Inside CartServiceImpl.removeMultipleFromCart userEmail={}, itemCount={}", userEmail, cartDetailIds.size());
 
         try {
             UserEntity user = findUserByEmail(userEmail);
@@ -188,26 +188,26 @@ public class CartServiceImpl implements CartService {
                     "No cart items found or you don't have permission to access");
             }
 
-            log.info("Successfully removed multiple items from cart: userEmail={}, itemCount={}", userEmail, deletedCount);
+            log.info("Inside CartServiceImpl.removeMultipleFromCart success userEmail={}, itemCount={}", userEmail, deletedCount);
             
         } catch (Exception e) {
-            log.error("Error removing multiple items from cart: userEmail={}, error={}", userEmail, e.getMessage(), e);
+            log.error("Inside CartServiceImpl.removeMultipleFromCart error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }
 
     @Override
     public void clearCart(String userEmail) {
-        log.info("Clearing cart for user: {}", userEmail);
+        log.info("Inside CartServiceImpl.clearCart userEmail={}", userEmail);
 
         try {
             UserEntity user = findUserByEmail(userEmail);
             int deletedCount = cartDetailRepository.deleteAllByUserId(user.getId());
 
-            log.info("Successfully cleared cart for user: {}, deleted {} items", userEmail, deletedCount);
+            log.info("Inside CartServiceImpl.clearCart success userEmail={}, deletedItems={}", userEmail, deletedCount);
             
         } catch (Exception e) {
-            log.error("Error clearing cart: userEmail={}, error={}", userEmail, e.getMessage(), e);
+            log.error("Inside CartServiceImpl.clearCart error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }
@@ -215,17 +215,17 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional(readOnly = true)
     public long getCartItemCount(String userEmail) {
-        log.debug("Getting cart item count for user: {}", userEmail);
+        log.debug("Inside CartServiceImpl.getCartItemCount userEmail={}", userEmail);
         
         try {
             UserEntity user = findUserByEmail(userEmail);
             long count = cartDetailRepository.countByUserId(user.getId());
             
-            log.debug("Cart item count for user {}: {}", userEmail, count);
+            log.debug("Inside CartServiceImpl.getCartItemCount success userEmail={}, count={}", userEmail, count);
             return count;
             
         } catch (Exception e) {
-            log.error("Error getting cart item count: userEmail={}, error={}", userEmail, e.getMessage(), e);
+            log.error("Inside CartServiceImpl.getCartItemCount error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }

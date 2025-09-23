@@ -31,7 +31,7 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     public AddressResponse createAddress(String userEmail, CreateAddressRequest request) {
-        log.info("Request: {}", request);
+        log.info("Inside AddressServiceImpl.createAddress userEmail={}, request={}", userEmail, request);
 
         // Find user
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
@@ -39,7 +39,7 @@ public class AddressServiceImpl implements AddressService {
 
         // If this address is set as default, unset other default addresses first
         if (request.isDefault()) {
-            log.info("Setting address as default, unsetting other default addresses for user: {}", userEmail);
+            log.info("Inside AddressServiceImpl.createAddress setDefault userEmail={}", userEmail);
             unsetOtherDefaultAddresses(user.getId());
         }
 
@@ -55,10 +55,10 @@ public class AddressServiceImpl implements AddressService {
                 .isDefault(request.isDefault())
                 .build();
 
-        log.info("Created address entity with isDefault: {} for user: {}", address.isDefault(), userEmail);
+        log.info("Inside AddressServiceImpl.createAddress created isDefault={}, userEmail={}", address.isDefault(), userEmail);
         
         AddressEntity savedAddress = addressRepository.save(address);
-        log.info("Address created with ID: {} and isDefault: {} for user: {}", 
+        log.info("Inside AddressServiceImpl.createAddress success addressId={}, isDefault={}, userEmail={}", 
                 savedAddress.getId(), savedAddress.isDefault(), userEmail);
 
         return AddressResponse.fromEntity(savedAddress);
@@ -67,7 +67,7 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional(readOnly = true)
     public List<AddressResponse> getUserAddresses(String userEmail) {
-        log.info("Getting addresses for user: {}", userEmail);
+        log.info("Inside AddressServiceImpl.getUserAddresses userEmail={}", userEmail);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -77,14 +77,14 @@ public class AddressServiceImpl implements AddressService {
                 .map(AddressResponse::fromEntity)
                 .collect(Collectors.toList());
 
-        log.info("Found {} addresses for user: {}", responses.size(), userEmail);
+        log.info("Inside AddressServiceImpl.getUserAddresses success userEmail={}, count={}", userEmail, responses.size());
         return responses;
     }
 
     @Override
     @Transactional(readOnly = true)
     public AddressResponse getAddressById(String userEmail, Long addressId) {
-        log.info("Getting address ID: {} for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.getAddressById userEmail={}, addressId={}", userEmail, addressId);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -97,7 +97,7 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     public AddressResponse updateAddress(String userEmail, Long addressId, UpdateAddressRequest request) {
-        log.info("Updating address ID: {} for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.updateAddress userEmail={}, addressId={}", userEmail, addressId);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -133,14 +133,14 @@ public class AddressServiceImpl implements AddressService {
         }
 
         AddressEntity updatedAddress = addressRepository.save(address);
-        log.info("Address ID: {} updated for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.updateAddress success userEmail={}, addressId={}", userEmail, addressId);
 
         return AddressResponse.fromEntity(updatedAddress);
     }
 
     @Override
     public void deleteAddress(String userEmail, Long addressId) {
-        log.info("Deleting address ID: {} for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.deleteAddress userEmail={}, addressId={}", userEmail, addressId);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -149,12 +149,12 @@ public class AddressServiceImpl implements AddressService {
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Address not found"));
 
         addressRepository.delete(address);
-        log.info("Address ID: {} deleted for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.deleteAddress success userEmail={}, addressId={}", userEmail, addressId);
     }
 
     @Override
     public AddressResponse setDefaultAddress(String userEmail, Long addressId) {
-        log.info("Setting default address ID: {} for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.setDefaultAddress userEmail={}, addressId={}", userEmail, addressId);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -169,7 +169,7 @@ public class AddressServiceImpl implements AddressService {
         address.setDefault(true);
         AddressEntity updatedAddress = addressRepository.save(address);
 
-        log.info("Address ID: {} set as default for user: {}", addressId, userEmail);
+        log.info("Inside AddressServiceImpl.setDefaultAddress success userEmail={}, addressId={}", userEmail, addressId);
         return AddressResponse.fromEntity(updatedAddress);
     }
 

@@ -38,7 +38,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse getCurrentUser(String email) {
-        log.info("Fetching current user: {}", email);
+        log.info("Inside UserServiceImpl.getCurrentUser email={}", email);
         if (isEmpty(email)) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Invalid email");
         }
@@ -49,7 +49,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse updateUser(String email, UpdateUserRequest request) {
-        log.info("Updating user: {}", email);
+        log.info("Inside UserServiceImpl.updateUser email={}", email);
         
         // Validate
         if (request == null || isEmpty(email)) {
@@ -81,25 +81,25 @@ public class UserServiceImpl implements UserService {
 
         // Save and return
         UserEntity updatedUser = userRepository.save(user);
-        log.info("User updated: {}", updatedUser.getEmail());
+        log.info("Inside UserServiceImpl.updateUser success email={}", updatedUser.getEmail());
         
         return UserResponse.fromEntity(updatedUser);
     }
 
     @Override
     public List<UserResponse> getAllUsers() {
-        log.info("Fetching all users");
+        log.info("Inside UserServiceImpl.getAllUsers");
         List<UserEntity> users = userRepository.findAll();
         List<UserResponse> userResponses = users.stream()
                 .map(UserResponse::fromEntity)
                 .toList();
-        log.info("Found {} users", userResponses.size());
+        log.info("Inside UserServiceImpl.getAllUsers success count={}", userResponses.size());
         return userResponses;
     }
 
     @Override
     public UserResponse updateUserStatus(UpdateUserStatusRequest request) {
-        log.info("Updating user status for user ID: {} to status: {}", request.getUserId(), request.getIsActive());
+        log.info("Inside UserServiceImpl.updateUserStatus userId={}, isActive={}", request.getUserId(), request.getIsActive());
         
         // Validate request
         if (request == null || request.getUserId() == null || request.getIsActive() == null) {
@@ -115,7 +115,7 @@ public class UserServiceImpl implements UserService {
         
         // Save and return
         UserEntity updatedUser = userRepository.save(user);
-        log.info("User status updated for user ID: {} to status: {}", updatedUser.getId(), updatedUser.isActive());
+        log.info("Inside UserServiceImpl.updateUserStatus success userId={}, isActive={}", updatedUser.getId(), updatedUser.isActive());
         
         return UserResponse.fromEntity(updatedUser);
     }
@@ -143,23 +143,23 @@ public class UserServiceImpl implements UserService {
     
     @Override
     public void addProductToRecentlyViewed(String email, long productId) {
-        log.info("Adding product {} to recently viewed for user: {}", productId, email);
+        log.info("Inside UserServiceImpl.addProductToRecentlyViewed email={}, productId={}", email, productId);
         
         try {
             UserResponse user = getCurrentUser(email);
             recentViewService.addViewed(user.getId(), productId);
             
-            log.info("Successfully added product {} to recently viewed for user: {}", productId, email);
+            log.info("Inside UserServiceImpl.addProductToRecentlyViewed success email={}, productId={}", email, productId);
             
         } catch (Exception e) {
-            log.error("Error adding product {} to recently viewed for user {}: {}", productId, email, e.getMessage(), e);
+            log.error("Inside UserServiceImpl.addProductToRecentlyViewed error email={}, productId={}, message={}", email, productId, e.getMessage(), e);
             throw e;
         }
     }
     
     @Override
     public List<ProductCardView> getRecentlyViewedProducts(String email) {
-        log.info("Getting recently viewed products for user: {}", email);
+        log.info("Inside UserServiceImpl.getRecentlyViewedProducts email={}", email);
         
         try {
             UserResponse user = getCurrentUser(email);
@@ -167,7 +167,7 @@ public class UserServiceImpl implements UserService {
             List<Long> recentProductIds = recentViewService.getRecentIds(user.getId());
             
             if (recentProductIds.isEmpty()) {
-                log.info("No recently viewed products found for user: {}", email);
+                log.info("Inside UserServiceImpl.getRecentlyViewedProducts none email={}", email);
                 return List.of();
             }
             
@@ -184,43 +184,43 @@ public class UserServiceImpl implements UserService {
                                 .filter(Objects::nonNull)
                                 .toList();
 
-            log.info("Found {} recently viewed products for user: {}", ordered.size(), email);
+            log.info("Inside UserServiceImpl.getRecentlyViewedProducts success email={}, count={}", email, ordered.size());
             return ordered;
             
         } catch (Exception e) {
-            log.error("Error getting recently viewed products for user {}: {}", email, e.getMessage(), e);
+            log.error("Inside UserServiceImpl.getRecentlyViewedProducts error email={}, message={}", email, e.getMessage(), e);
             throw e;
         }
     }
     
     @Override
     public void removeSelectedProductsFromRecentlyViewed(String email, List<Long> productIds) {
-        log.info("Removing selected products {} from recently viewed for user: {}", productIds, email);
+        log.info("Inside UserServiceImpl.removeSelectedProductsFromRecentlyViewed email={}, productIds={}", email, productIds);
         
         try {
             UserResponse user = getCurrentUser(email);
             recentViewService.removeSelected(user.getId(), productIds);
             
-            log.info("Successfully removed {} products from recently viewed for user: {}", productIds.size(), email);
+            log.info("Inside UserServiceImpl.removeSelectedProductsFromRecentlyViewed success email={}, removedCount={}", email, productIds.size());
             
         } catch (Exception e) {
-            log.error("Error removing selected products from recently viewed for user {}: {}", email, e.getMessage(), e);
+            log.error("Inside UserServiceImpl.removeSelectedProductsFromRecentlyViewed error email={}, message={}", email, e.getMessage(), e);
             throw e;
         }
     }
     
     @Override
     public void clearRecentlyViewedProducts(String email) {
-        log.info("Clearing all recently viewed products for user: {}", email);
+        log.info("Inside UserServiceImpl.clearRecentlyViewedProducts email={}", email);
         
         try {
             UserResponse user = getCurrentUser(email);
             recentViewService.clearAll(user.getId());
             
-            log.info("Successfully cleared all recently viewed products for user: {}", email);
+            log.info("Inside UserServiceImpl.clearRecentlyViewedProducts success email={}", email);
             
         } catch (Exception e) {
-            log.error("Error clearing recently viewed products for user {}: {}", email, e.getMessage(), e);
+            log.error("Inside UserServiceImpl.clearRecentlyViewedProducts error email={}, message={}", email, e.getMessage(), e);
             throw e;
         }}
 }

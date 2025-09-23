@@ -227,4 +227,24 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
         """, nativeQuery = true)
     Optional<Long> findDetailIdForColor(@Param("baseDetailId") Long baseDetailId, @Param("colorName") String colorName);
 
+    @Query(value = """
+        SELECT d.id
+        FROM product_details d
+        WHERE d.product_id = (
+            SELECT pd.product_id FROM product_details pd WHERE pd.id = :baseDetailId
+        )
+          AND d.color_id = (
+            SELECT c.id FROM colors c WHERE LOWER(c.name) = LOWER(:colorName)
+          )
+          AND d.size_id = (
+            SELECT s.id FROM sizes s WHERE LOWER(s.code) = LOWER(:size) OR LOWER(s.label) = LOWER(:size)
+          )
+          AND d.is_active = TRUE
+        ORDER BY d.price ASC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<Long> findDetailIdForColorAndSize(@Param("baseDetailId") Long baseDetailId,
+                                               @Param("colorName") String colorName,
+                                               @Param("size") String size);
+
 }

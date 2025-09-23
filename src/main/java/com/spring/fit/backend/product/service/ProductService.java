@@ -21,5 +21,7 @@ public interface ProductService {
 
     ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor);
 
+    ProductDetailResponse getProductDetailByColorAndSize(Long baseDetailId, String activeColor, String activeSize);
+
     List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId);
 }

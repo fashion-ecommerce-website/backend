@@ -193,7 +193,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailById(Long detailId) {
-        log.info("Getting product detail by ID: {}", detailId);
+        log.info("Inside ProductServiceImpl.getProductDetailById detailId={}", detailId);
         
         if (detailId == null) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Detail ID cannot be null");
@@ -204,7 +204,7 @@ public class ProductServiceImpl implements ProductService {
             ProductDetail productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
             
-            log.debug("Found product detail: {}", productDetail.getId());
+            log.debug("Inside ProductServiceImpl.getProductDetailById found detailId={}", productDetail.getId());
             
             // 2. Lấy Product từ ProductDetail
             Product product = productDetail.getProduct();
@@ -212,19 +212,20 @@ public class ProductServiceImpl implements ProductService {
                 throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Product not found for detail ID: " + detailId);
             }
             
-            log.info("Product id={}, title={}", product.getId(), product.getTitle());
-            // 3. Lấy activeColor từ ProductDetail
+            log.info("Inside ProductServiceImpl.getProductDetailById productId={}, title={}", product.getId(), product.getTitle());
+            // 3. Lấy activeColor & activeSize từ ProductDetail
             String activeColor = productDetail.getColor().getName();
-            log.info("Active color: {}", activeColor);
+            String activeSize = productDetail.getSize().getLabel();
+            log.info("Inside ProductServiceImpl.getProductDetailById activeColor={}, activeSize={}", activeColor, activeSize);
             // 4. Lấy tất cả colors của product này (native query để tránh lazy load)
             List<String> colorList = productDetailRepository.findAllColorsByDetailId(detailId);
             Set<String> allColors = new LinkedHashSet<>(colorList);
             
-            log.info("All colors: {}", allColors);
+            log.info("Inside ProductServiceImpl.getProductDetailById colors={}", allColors);
             // 5. Lấy images của ProductDetail hiện tại (native query)
             List<String> images = productDetailRepository.findImageUrlsByDetailId(detailId);
             
-            log.info("Images: {}", images);
+            log.info("Inside ProductServiceImpl.getProductDetailById imagesSize={}", images != null ? images.size() : 0);
             // 6. Lấy mapSizeToQuantity từ ProductDetail của cùng product và color (native query)
             Map<String, Integer> mapSizeToQuantity = productDetailRepository.findSizeQuantityByDetailId(detailId)
                     .stream()
@@ -235,7 +236,7 @@ public class ProductServiceImpl implements ProductService {
                             LinkedHashMap::new
                     ));
             
-            log.info("Map size to quantity: {}", mapSizeToQuantity);
+            log.info("Inside ProductServiceImpl.getProductDetailById mapSizeToQuantityKeys={}", mapSizeToQuantity.keySet());
             // 7. Parse description từ String thành List<String>
             List<String> descriptionList = new ArrayList<>();
             if (StringUtils.hasText(product.getDescription())) {
@@ -245,20 +246,21 @@ public class ProductServiceImpl implements ProductService {
                         .filter(StringUtils::hasText)
                         .collect(Collectors.toList());
             }
-            log.info("Description list: {}", descriptionList);
+            log.info("Inside ProductServiceImpl.getProductDetailById descriptionCount={}", descriptionList.size());
             // 8. Build response
             ProductDetailResponse response = ProductDetailResponse.builder()
                     .detailId(detailId)
                     .title(product.getTitle())
                     .price(productDetail.getPrice())
                     .activeColor(activeColor)
+                    .activeSize(activeSize)
                     .images(images)
                     .colors(new ArrayList<>(allColors))
                     .mapSizeToQuantity(mapSizeToQuantity)
                     .description(descriptionList)
                     .build();
             
-            log.info("Successfully built product detail response for ID: {}", detailId);
+            log.info("Inside ProductServiceImpl.getProductDetailById success detailId={}", detailId);
             return response;
             
         } catch (ErrorException e) {
@@ -272,13 +274,33 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor) {
-        log.info("Getting product detail by color. baseDetailId={}, color={}", baseDetailId, activeColor);
+        log.info("Inside ProductServiceImpl.getProductDetailByColor baseDetailId={}, color={}", baseDetailId, activeColor);
+        Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, null);
+        return getProductDetailById(resolvedDetailId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getProductDetailByColorAndSize(Long baseDetailId, String activeColor, String activeSize) {
+        log.info("Inside getProductDetailByColorAndSize.ProductServiceImpl getProductDetail baseDetailId={}, color={}, size={}", baseDetailId, activeColor, activeSize);
+        Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, activeSize);
+        return getProductDetailById(resolvedDetailId);
+    }
+
+    private Long resolveDetailId(Long baseDetailId, String activeColor, String activeSize) {
         if (baseDetailId == null || !StringUtils.hasText(activeColor)) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "baseDetailId and activeColor are required");
         }
-        Long resolvedDetailId = productDetailRepository.findDetailIdForColor(baseDetailId, activeColor)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "No detail found for color: " + activeColor));
-        return getProductDetailById(resolvedDetailId);
+        if (StringUtils.hasText(activeSize)) {
+            return productDetailRepository
+                    .findDetailIdForColorAndSize(baseDetailId, activeColor, activeSize)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
+                            "No detail found for color & size: " + activeColor + ", " + activeSize));
+        }
+        return productDetailRepository
+                .findDetailIdForColor(baseDetailId, activeColor)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
+                        "No detail found for color: " + activeColor));
     }
     
     // Records cho better type safety và immutability

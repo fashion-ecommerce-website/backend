@@ -24,6 +24,9 @@ public class ProductDetailResponse {
     @JsonProperty("activeColor")
     private String activeColor;
     
+    @JsonProperty("activeSize")
+    private String activeSize;
+    
     private List<String> images;
     private List<String> colors;
     

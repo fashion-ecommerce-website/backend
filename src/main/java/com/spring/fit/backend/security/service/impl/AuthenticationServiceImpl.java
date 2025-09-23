@@ -61,7 +61,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         @Override
         @Transactional
         public AuthenticationResponse register(RegisterRequest request) {
-                log.info("Registering new user with email: {}", request.getEmail());
+                log.info("Inside AuthenticationServiceImpl.register email={}", request.getEmail());
 
                 // Check if user already exists
                 if (userRepository.existsByEmail(request.getEmail())) {
@@ -110,7 +110,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 // Send OTP to email
                 try {
                         otpService.sendOtp(request.getEmail());
-                        log.info("OTP sent to email: {}", request.getEmail());
+                        log.info("Inside AuthenticationServiceImpl.register otpSent email={}", request.getEmail());
                 } catch (Exception e) {
                         log.error("Failed to send OTP to email {}: {}", request.getEmail(), e.getMessage());
                 }
@@ -120,7 +120,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 String accessToken = jwtService.generateToken(userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
 
-                log.info("User registered successfully: {}", user.getEmail());
+                log.info("Inside AuthenticationServiceImpl.register success email={}", user.getEmail());
 
                 return AuthenticationResponse.builder()
                                 .accessToken(accessToken)
@@ -133,7 +133,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         @Override
         public AuthenticationResponse authenticate(AuthenticationRequest request) {
-                log.info("Authenticating user with email: {}", request.getEmail());
+                log.info("Inside AuthenticationServiceImpl.authenticate email={}", request.getEmail());
 
                 // Authenticate user
                 authenticationManager.authenticate(
@@ -159,7 +159,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 String accessToken = jwtService.generateToken(userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
 
-                log.info("User authenticated successfully: {}", user.getEmail());
+                log.info("Inside AuthenticationServiceImpl.authenticate success email={}", user.getEmail());
 
                 return AuthenticationResponse.builder()
                                 .accessToken(accessToken)
@@ -173,7 +173,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         @Override
         @Transactional
         public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
-                log.info("Refreshing token");
+                log.info("Inside AuthenticationServiceImpl.refreshToken");
 
                 // Find refresh token
                 RefreshTokenEntity refreshToken = refreshTokenRepository.findByTokenHash(request.getRefreshToken())
@@ -198,7 +198,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 refreshToken.setRevokedAt(LocalDateTime.now());
                 refreshTokenRepository.save(refreshToken);
 
-                log.info("Token refreshed successfully for user: {}", user.getEmail());
+                log.info("Inside AuthenticationServiceImpl.refreshToken success email={}", user.getEmail());
 
                 return AuthenticationResponse.builder()
                                 .accessToken(newAccessToken)
@@ -212,7 +212,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         @Override
         @Transactional
         public void logout(String refreshToken) {
-                log.info("Logging out user");
+                log.info("Inside AuthenticationServiceImpl.logout");
 
                 RefreshTokenEntity token = refreshTokenRepository.findByTokenHash(refreshToken)
                                 .orElse(null);
@@ -221,7 +221,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         token.setRevoked(true);
                         token.setRevokedAt(LocalDateTime.now());
                         refreshTokenRepository.save(token);
-                        log.info("User logged out successfully");
+                        log.info("Inside AuthenticationServiceImpl.logout success");
                 }
         }
 
@@ -230,7 +230,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         public void changePassword(ChangePasswordRequest request) {
                 // Get email from SecurityContext (JWT token)
                 String email = SecurityContextHolder.getContext().getAuthentication().getName();
-                log.info("Changing password for user: {}", email);
+                log.info("Inside AuthenticationServiceImpl.changePassword email={}", email);
 
                 UserEntity user = userRepository.findActiveUserByEmail(email)
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -243,13 +243,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.setUpdatedAt(LocalDateTime.now());
                 userRepository.save(user);
 
-                log.info("Password changed successfully for user: {}", email);
+                log.info("Inside AuthenticationServiceImpl.changePassword success email={}", email);
         }
 
         @Override
         @Transactional
         public void resetPassword(ResetPasswordRequest request) {
-                log.info("Resetting password using token");
+                log.info("Inside AuthenticationServiceImpl.resetPassword");
 
                 UserEntity user = userRepository.findByResetPasswordToken(request.getToken())
                                 .orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, "Invalid reset token"));
@@ -265,7 +265,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.setUpdatedAt(LocalDateTime.now());
                 userRepository.save(user);
 
-                log.info("Password reset successfully for user: {}", user.getEmail());
+                log.info("Inside AuthenticationServiceImpl.resetPassword success email={}", user.getEmail());
         }
 
         @Override
@@ -313,7 +313,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 // Simply add default USER role to avoid LazyInitializationException
                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                 
-                log.info("Created authorities for user {}: {}", user.getEmail(), authorities);
+                log.info("Inside AuthenticationServiceImpl.createAuthorities email={}, authorities={}", user.getEmail(), authorities);
 
                 return authorities;
         }
@@ -341,7 +341,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         @Override
         @Transactional
         public void verifyEmail(String email) {
-                log.info("Verifying email: {}", email);
+                log.info("Inside AuthenticationServiceImpl.verifyEmail email={}", email);
                 
                 UserEntity user = userRepository.findByEmail(email)
                                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -349,6 +349,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.setEmailVerified(true);
                 userRepository.save(user);
                 
-                log.info("Email verified successfully for user: {}", user.getEmail());
+                log.info("Inside AuthenticationServiceImpl.verifyEmail success email={}", user.getEmail());
         }
 }
