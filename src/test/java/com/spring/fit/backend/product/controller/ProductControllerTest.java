@@ -1,7 +1,7 @@
 package com.spring.fit.backend.product.controller;
 
 import com.spring.fit.backend.common.model.response.PageResult;
-import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.service.ProductService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

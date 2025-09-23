@@ -1,4 +1,4 @@
-package com.spring.fit.backend.product.domain.dto;
+package com.spring.fit.backend.product.domain.dto.response;
 
 import java.math.BigDecimal;
 import java.util.List;

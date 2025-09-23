@@ -1,4 +1,4 @@
-package com.spring.fit.backend.product.domain.dto;
+package com.spring.fit.backend.product.domain.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
