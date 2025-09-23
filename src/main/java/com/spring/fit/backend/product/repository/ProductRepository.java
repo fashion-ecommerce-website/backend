@@ -1,7 +1,7 @@
 package com.spring.fit.backend.product.repository;
 
-import com.spring.fit.backend.product.domain.dto.ProductCardView;
-import com.spring.fit.backend.product.domain.dto.SizeQuantityView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.SizeQuantityView;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.repository.*;
@@ -247,4 +247,35 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
                                                @Param("colorName") String colorName,
                                                @Param("size") String size);
 
+    @Query(value = """
+    SELECT i.url
+    FROM product_images pi
+    JOIN product_details pd ON pi.detail_id = pd.id
+    JOIN images i ON i.id = pi.image_id
+    WHERE pd.product_id = :productId
+    AND pd.is_active = true
+    ORDER BY pi.created_at ASC
+    LIMIT 1
+    """, nativeQuery = true)
+    List<String> findFirstImageUrlByProductId(@Param("productId") Long productId);
+
+    @Query(value = """
+    SELECT DISTINCT c.name
+    FROM product_details d
+    JOIN colors c ON c.id = d.color_id
+    WHERE d.product_id = :productId
+      AND d.is_active = TRUE
+    ORDER BY c.name
+    """, nativeQuery = true)
+    List<String> findAllColorsByProductId(@Param("productId") Long productId);
+
+    @Query(value = """
+    SELECT DISTINCT s.code
+    FROM product_details d
+    JOIN sizes s ON s.id = d.size_id
+    WHERE d.product_id = :productId
+      AND d.is_active = TRUE
+    ORDER BY s.code
+    """, nativeQuery = true)
+    List<String> findAllSizesByProductId(@Param("productId") Long productId);
 }

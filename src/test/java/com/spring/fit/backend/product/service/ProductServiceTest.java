@@ -1,7 +1,7 @@
 package com.spring.fit.backend.product.service;
 
 import com.spring.fit.backend.common.model.response.PageResult;
-import com.spring.fit.backend.product.domain.dto.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.repository.ProductRepository;
 import com.spring.fit.backend.product.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.BeforeEach;

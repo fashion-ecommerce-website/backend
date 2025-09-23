@@ -3,8 +3,8 @@ package com.spring.fit.backend.user.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.fit.backend.security.jwt.JwtService;
 
-import com.spring.fit.backend.user.domain.dto.UpdateUserRequest;
-import com.spring.fit.backend.user.domain.dto.UserResponse;
+import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
+import com.spring.fit.backend.user.domain.dto.response.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -46,7 +46,7 @@ public class CartServiceImpl implements CartService {
 
             // Find product detail
             ProductDetail productDetail = productRepository.findById(request.getProductDetailId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
                         "Cannot found product with ID: " + request.getProductDetailId()));
 
             // Check if product detail is active
