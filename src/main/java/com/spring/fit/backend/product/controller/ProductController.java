@@ -77,7 +77,7 @@ public class ProductController {
         }
     }
 
-    @GetMapping("/{detailId}")
+    @GetMapping("/details/{detailId}")
     public ResponseEntity<ProductDetailResponse> getProductDetailById(
             @PathVariable Long detailId) {
         log.info("Inside ProductController.getProductDetailById detailId={}", detailId);
@@ -92,7 +92,7 @@ public class ProductController {
         }
     }
 
-    @GetMapping("/{detailId}/color")
+    @GetMapping("/details/{detailId}/color")
     public ResponseEntity<ProductDetailResponse> getProductDetailByColor(
             @PathVariable Long detailId,
             @RequestParam("activeColor") String activeColor,
