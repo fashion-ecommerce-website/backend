@@ -26,16 +26,26 @@ public class CreateProductRequest {
     
     @NotEmpty(message = "Product must have at least one variant")
     @Valid
-    private List<ProductDetailRequest> productDetails;
+    private List<ColorVariantRequest> productDetails;
     
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
-    public static class ProductDetailRequest {
+    public static class ColorVariantRequest {
         
         @NotNull(message = "Color ID cannot be null")
         @Positive(message = "Color ID must be positive")
         private Short colorId;
+        
+        @NotEmpty(message = "Color variant must have at least one size")
+        @Valid
+        private List<SizeVariantRequest> sizeVariants;
+    }
+    
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class SizeVariantRequest {
         
         @NotNull(message = "Size ID cannot be null") 
         @Positive(message = "Size ID must be positive")

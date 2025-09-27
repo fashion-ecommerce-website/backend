@@ -120,10 +120,10 @@ public class ProductController {
         log.info("Inside ProductController.createProduct title={}", request.getTitle());
 
         try {
-            // Parse images by detail index
-            Map<Integer, List<MultipartFile>> imagesByDetail = parseImagesByDetail(images);
+            // Parse images by color ID
+            Map<Short, List<MultipartFile>> imagesByColor = parseImagesByColor(images);
 
-            ProductResponse response = productService.createProduct(request, imagesByDetail);
+            ProductResponse response = productService.createProduct(request, imagesByColor);
 
             log.info("Inside ProductController.createProduct success productId={}", response.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -387,29 +387,25 @@ public class ProductController {
 
     // ============ Helper Methods ============
 
-    private Map<Integer, List<MultipartFile>> parseImagesByDetail(MultiValueMap<String, MultipartFile> images) {
-        Map<Integer, List<MultipartFile>> imagesByDetail = new HashMap<>();
+    private Map<Short, List<MultipartFile>> parseImagesByColor(MultiValueMap<String, MultipartFile> images) {
+        Map<Short, List<MultipartFile>> imagesByColor = new HashMap<>();
 
         if (images != null) {
             images.forEach((key, files) -> {
                 try {
-                    Integer detailIndex = null;
+                    Short colorId = null;
 
-                    // Support keys: "images[detail_0]" or "detail_0"
-                    if (key != null) {
-                        if (key.startsWith("images[detail_") && key.endsWith("]")) {
-                            String idx = key.substring("images[detail_".length(), key.length() - 1);
-                            detailIndex = Integer.parseInt(idx);
-                        } else if (key.startsWith("detail_")) {
-                            detailIndex = Integer.parseInt(key.substring(7));
-                        }
+                    // Support keys: "detail_1", "detail_2", etc. where number is colorId
+                    if (key != null && key.startsWith("detail_")) {
+                        String colorIdStr = key.substring(7); // Remove "detail_" prefix
+                        colorId = Short.parseShort(colorIdStr);
                     }
 
-                    if (detailIndex != null) {
+                    if (colorId != null) {
                         if (files != null && files.size() > 5) {
-                            throw new IllegalArgumentException("Each product variant can only have maximum 5 images");
+                            throw new IllegalArgumentException("Each color variant can only have maximum 5 images");
                         }
-                        imagesByDetail.put(detailIndex, files);
+                        imagesByColor.put(colorId, files);
                     }
                 } catch (NumberFormatException e) {
                     log.warn("Invalid image key format: {}", key);
@@ -417,6 +413,6 @@ public class ProductController {
             });
         }
 
-        return imagesByDetail;
+        return imagesByColor;
     }
 }
