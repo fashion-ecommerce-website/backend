@@ -1,6 +1,6 @@
 package com.spring.fit.backend.wishlist.domain.dto;
 
-import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
+import com.spring.fit.backend.product.domain.dto.response.ProductDetailResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
