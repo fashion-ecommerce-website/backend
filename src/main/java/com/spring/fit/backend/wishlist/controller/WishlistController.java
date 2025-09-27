@@ -1,10 +1,13 @@
 package com.spring.fit.backend.wishlist.controller;
 
 import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
+import com.spring.fit.backend.user.domain.dto.response.AddressResponse;
 import com.spring.fit.backend.wishlist.domain.dto.ProductWishlistResponse;
-import com.spring.fit.backend.wishlist.domain.dto.WishlistToggleRequest;
+import com.spring.fit.backend.wishlist.domain.dto.WishlistToggleResponse;
 import com.spring.fit.backend.wishlist.service.WishlistService;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -16,33 +19,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WishlistController {
 
-    private final WishlistService wishlistService;
+    @Autowired
+    private WishlistService wishlistService;
 
-    /**
-     * Lấy danh sách wishlist của user
-     */
-    @GetMapping
-    public ResponseEntity<List<ProductWishlistResponse>> getWishlist() {
+    @PutMapping("/toggle/{detailId}")
+    public ResponseEntity<WishlistToggleResponse> toggleWishlist(
+            @PathVariable("detailId") @Positive(message = "Detail ID must be positive") Long productDetailId) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<ProductWishlistResponse> wishlist = wishlistService.getUserWishlist(email);
-        return ResponseEntity.ok(wishlist);
-    }
-
-    /**
-     * Toggle wishlist (thêm hoặc xoá nếu đã tồn tại)
-     */
-    @PostMapping("/toggle")
-    public ResponseEntity<ProductWishlistResponse> toggleWishlist(
-            @RequestBody WishlistToggleRequest request
-    ) {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        ProductWishlistResponse response = wishlistService.toggleWishlist(
-                email,
-                request.getProductId(),
-                request.getColorId(),
-                request.getSizeId()
-        );
+        WishlistToggleResponse response = wishlistService.toggleWishlist(email, productDetailId);
         return ResponseEntity.ok(response);
     }
 
+
+    @GetMapping()
+    public ResponseEntity<List<ProductDetailResponse>> getWishlistByUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        List<ProductDetailResponse> wishlist = wishlistService.getWishlistByUserId(email);
+        return ResponseEntity.ok(wishlist);
+    }
 }

@@ -5,28 +5,28 @@ import com.spring.fit.backend.security.domain.entity.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "wishlists")
+@Table(name = "wishlists",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "detail_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@IdClass(WishlistId.class)
 public class Wishlist {
-
     @Id
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserEntity user;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long wishlistId;
 
-    @Id
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "detail_id", nullable = false)
-    private ProductDetail productDetail;
+    private Long userId;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private Long detailId;
+
+    private Timestamp createdAt;
+
+    public Wishlist(Long id, Long detailId) {
+    }
 }
