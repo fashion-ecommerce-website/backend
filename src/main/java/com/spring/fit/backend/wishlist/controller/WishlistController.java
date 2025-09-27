@@ -1,8 +1,6 @@
 package com.spring.fit.backend.wishlist.controller;
 
-import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
-import com.spring.fit.backend.user.domain.dto.response.AddressResponse;
-import com.spring.fit.backend.wishlist.domain.dto.ProductWishlistResponse;
+import com.spring.fit.backend.product.domain.dto.response.ProductDetailResponse;
 import com.spring.fit.backend.wishlist.domain.dto.WishlistToggleResponse;
 import com.spring.fit.backend.wishlist.service.WishlistService;
 import jakarta.validation.constraints.Positive;

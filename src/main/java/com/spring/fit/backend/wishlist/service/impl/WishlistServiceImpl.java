@@ -1,7 +1,7 @@
 package com.spring.fit.backend.wishlist.service.impl;
 
 import com.spring.fit.backend.common.exception.ErrorException;
-import com.spring.fit.backend.product.domain.dto.ProductDetailResponse;
+import com.spring.fit.backend.product.domain.dto.response.ProductDetailResponse;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
