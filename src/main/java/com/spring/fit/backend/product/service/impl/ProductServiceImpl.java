@@ -460,7 +460,7 @@ public class ProductServiceImpl implements ProductService {
 
         } catch (Exception e) {
             log.error("Database query failed for getAllProducts: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi truy vấn danh sách sản phẩm", e);
+            throw new RuntimeException("Inside ProductServiceImpl.getAllProducts: Error while querying product list", e);
         }
     }
 
