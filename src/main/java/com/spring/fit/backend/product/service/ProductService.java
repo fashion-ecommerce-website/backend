@@ -6,6 +6,7 @@ import com.spring.fit.backend.product.domain.dto.response.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 public interface ProductService {
     PageResult<ProductCardView> filterByCategory(
@@ -29,13 +30,12 @@ public interface ProductService {
 //    // ============ CRUD Operations ============
 
     /**
-     * Tạo sản phẩm mới với danh sách images cho mỗi variant
+     * Tạo sản phẩm mới với danh sách images cho mỗi color variant
      * @param request Thông tin sản phẩm
-     * @param imagesByDetail Map từ index của ProductDetailRequest sang danh sách file images (tối đa 5 images/detail)
+     * @param imagesByColor Map từ colorId sang danh sách file images (tối đa 5 images/color)
      * @return ProductResponse
      */
-    ProductResponse createProduct(CreateProductRequest request,
-                                  java.util.Map<Integer, List<MultipartFile>> imagesByDetail);
+    ProductResponse createProduct(CreateProductRequest request, Map<Short, List<MultipartFile>> imagesByColor);
 
     /**
      * Lấy thông tin chi tiết sản phẩm theo ID
