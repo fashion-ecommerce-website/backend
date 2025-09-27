@@ -118,3 +118,4 @@ public interface ProductService {
      */
     void deleteProductDetail(Long id);
 }
+
