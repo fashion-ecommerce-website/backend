@@ -57,4 +57,8 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
             @Param("sortDirection") String sortDirection,
             Pageable pageable
     );
+
+    boolean existsByCategories_Id(Long categoryId);
+
+
 }
