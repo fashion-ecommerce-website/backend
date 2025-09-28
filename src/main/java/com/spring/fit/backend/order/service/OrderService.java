@@ -42,9 +42,5 @@ public interface OrderService {
     Page<OrderResponse> getOrdersByUserIdAndDateRange(Long userId, LocalDateTime startDate, LocalDateTime endDate,
             Pageable pageable);
 
-    OrderResponse updateOrderStatus(Long id, FulfillmentStatus status);
-
-    OrderResponse updatePaymentStatus(Long id, PaymentStatus paymentStatus);
-
     OrderResponse calculateOrderTotals(Long id);
 }

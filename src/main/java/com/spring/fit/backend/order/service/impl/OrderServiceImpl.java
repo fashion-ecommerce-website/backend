@@ -252,32 +252,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponse updateOrderStatus(Long id, FulfillmentStatus status) {
-        log.info("Updating order status for id: {} to {}", id, status);
-        var order = orderRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
-
-        order.setStatus(status);
-        var savedOrder = orderRepository.save(order);
-        log.info("Order status updated successfully for id: {}", id);
-
-        return mapToResponse(savedOrder);
-    }
-
-    @Override
-    public OrderResponse updatePaymentStatus(Long id, PaymentStatus paymentStatus) {
-        log.info("Updating payment status for id: {} to {}", id, paymentStatus);
-        var order = orderRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
-
-        order.setPaymentStatus(paymentStatus);
-        var savedOrder = orderRepository.save(order);
-        log.info("Payment status updated successfully for id: {}", id);
-
-        return mapToResponse(savedOrder);
-    }
-
-    @Override
     public OrderResponse calculateOrderTotals(Long id) {
         log.info("Calculating order totals for id: {}", id);
         var order = orderRepository.findByIdWithDetails(id)
