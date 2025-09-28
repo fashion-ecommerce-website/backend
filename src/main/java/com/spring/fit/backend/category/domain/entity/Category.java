@@ -3,16 +3,15 @@ package com.spring.fit.backend.category.domain.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.spring.fit.backend.product.domain.entity.Product;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
 @Table(name = "categories")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class Category {

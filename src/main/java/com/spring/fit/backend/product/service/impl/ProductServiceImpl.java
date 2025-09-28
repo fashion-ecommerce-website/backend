@@ -325,8 +325,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse createProduct(CreateProductRequest request,
-                                         Map<Integer, List<MultipartFile>> imagesByDetail) {
-        log.info("Creating new product: {}", request.getTitle());
+                                         Map<Short, List<MultipartFile>> imagesByColor) {
+        log.info("Inside ProductServiceImpl.createProduct title={}", request.getTitle());
 
         try {
             // 1. Validate categories
@@ -344,59 +344,143 @@ public class ProductServiceImpl implements ProductService {
             // 3. Save product first to get ID
             product = productMainRepository.save(product);
 
-            // 4. Create product details with images
+            // 4. Create product details and handle images by color
             Set<ProductDetail> productDetails = new HashSet<>();
-            for (int i = 0; i < request.getProductDetails().size(); i++) {
-                CreateProductRequest.ProductDetailRequest detailRequest = request.getProductDetails().get(i);
+            Map<Short, List<ProductDetail>> productDetailsByColor = new HashMap<>();
+            
+            // First pass: Create all ProductDetails and group by color
+            for (CreateProductRequest.ColorVariantRequest colorVariant : request.getProductDetails()) {
+                Short colorId = colorVariant.getColorId();
+                
+                // Validate color exists
+                Color color = colorRepository.findById(colorId)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Color not found with ID: " + colorId));
 
-                // Validate color and size exist
-                Color color = colorRepository.findById(detailRequest.getColorId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Color not found with ID: " + detailRequest.getColorId()));
-                Size size = sizeRepository.findById(detailRequest.getSizeId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Size not found with ID: " + detailRequest.getSizeId()));
+                List<ProductDetail> colorProductDetails = new ArrayList<>();
+                
+                // Create product details for each size in this color
+                for (CreateProductRequest.SizeVariantRequest sizeVariant : colorVariant.getSizeVariants()) {
+                    Short sizeId = sizeVariant.getSizeId();
+                    
+                    // Validate size exists
+                    Size size = sizeRepository.findById(sizeId)
+                        .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Size not found with ID: " + sizeId));
 
-                // Check for duplicate color-size combination
-                Optional<ProductDetail> existingDetail = productDetailRepository
-                    .findByProductAndColorAndSize(product.getId(), detailRequest.getColorId(), detailRequest.getSizeId());
-                if (existingDetail.isPresent()) {
-                    throw new ErrorException(HttpStatus.CONFLICT, "Product variant already exists with color " + color.getName() + " and size " + size.getCode());
-                }
-
-                // Create ProductDetail
-                ProductDetail productDetail = new ProductDetail();
-                productDetail.setProduct(product);
-                productDetail.setSlug(generateSlug(product.getTitle(), color.getName(), size.getCode()));
-                productDetail.setColor(color);
-                productDetail.setSize(size);
-                productDetail.setPrice(detailRequest.getPrice());
-                productDetail.setQuantity(detailRequest.getQuantity());
-                productDetail.setIsActive(true);
-                productDetail.setCreatedAt(LocalDateTime.now());
-                productDetail.setUpdatedAt(LocalDateTime.now());
-
-                // Save detail first to get ID
-                productDetail = productDetailRepository.save(productDetail);
-
-                // Handle images for this detail
-                List<MultipartFile> images = imagesByDetail.get(i);
-                if (images != null && !images.isEmpty()) {
-                    if (images.size() > 5) {
-                        throw new ErrorException(HttpStatus.BAD_REQUEST, "Each product variant can only have maximum 5 images");
+                    // Check for duplicate color-size combination
+                    Optional<ProductDetail> existingDetail = productDetailRepository
+                        .findByProductAndColorAndSize(product.getId(), colorId, sizeId);
+                    if (existingDetail.isPresent()) {
+                        throw new ErrorException(HttpStatus.CONFLICT, "Product variant already exists with color " + color.getName() + " and size " + size.getCode());
                     }
-                    handleProductDetailImages(productDetail, images);
-                }
 
-                productDetails.add(productDetail);
+                    // Create ProductDetail
+                    ProductDetail productDetail = new ProductDetail();
+                    productDetail.setProduct(product);
+                    productDetail.setSlug(generateSlug(product.getTitle(), color.getName(), size.getCode()));
+                    productDetail.setColor(color);
+                    productDetail.setSize(size);
+                    productDetail.setPrice(sizeVariant.getPrice());
+                    productDetail.setQuantity(sizeVariant.getQuantity());
+                    productDetail.setIsActive(true);
+                    productDetail.setCreatedAt(LocalDateTime.now());
+                    productDetail.setUpdatedAt(LocalDateTime.now());
+
+                    // Save detail
+                    productDetail = productDetailRepository.save(productDetail);
+                    colorProductDetails.add(productDetail);
+                    productDetails.add(productDetail);
+                }
+                
+                productDetailsByColor.put(colorId, colorProductDetails);
             }
+
+            // Second pass: Handle images for each color
+            handleImagesForColors(productDetailsByColor, imagesByColor, product.getTitle());
 
             product.setDetails(productDetails);
 
-            log.info("Successfully created product with ID: {}", product.getId());
+            log.info("Inside ProductServiceImpl.createProduct success productId={}", product.getId());
             return mapToProductResponse(product);
 
         } catch (Exception e) {
-            log.error("Error creating product: {}", e.getMessage(), e);
+            log.error("Inside ProductServiceImpl.createProduct error title={}, error={}", request.getTitle(), e.getMessage(), e);
             throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error creating product: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle images for each color - upload once per color and assign to all sizes of that color
+     */
+    private void handleImagesForColors(Map<Short, List<ProductDetail>> productDetailsByColor, 
+                                       Map<Short, List<MultipartFile>> imagesByColor, 
+                                       String productTitle) {
+        for (Map.Entry<Short, List<ProductDetail>> entry : productDetailsByColor.entrySet()) {
+            Short colorId = entry.getKey();
+            List<ProductDetail> productDetailsForColor = entry.getValue();
+            List<MultipartFile> colorImages = imagesByColor.get(colorId);
+            
+            if (colorImages != null && !colorImages.isEmpty()) {
+                if (colorImages.size() > 5) {
+                    throw new ErrorException(HttpStatus.BAD_REQUEST, "Each color variant can only have maximum 5 images");
+                }
+                
+                // Get color name for alt text
+                String colorName = productDetailsForColor.get(0).getColor().getName();
+                
+                // Upload images once for this color
+                List<Image> uploadedImages = uploadImagesForColor(colorImages, productTitle, colorName);
+                
+                // Assign uploaded images to all ProductDetails of this color
+                assignImagesToProductDetails(productDetailsForColor, uploadedImages);
+            }
+        }
+    }
+
+    /**
+     * Upload images to Cloudinary and create Image entities
+     */
+    private List<Image> uploadImagesForColor(List<MultipartFile> images, String productTitle, String colorName) {
+        List<Image> uploadedImages = new ArrayList<>();
+        
+        for (MultipartFile imageFile : images) {
+            try {
+                // Upload image to Cloudinary
+                String imageUrl = imageService.uploadImage(imageFile, "products");
+
+                // Create or find Image entity
+                Image image = imageRepository.findByUrl(imageUrl)
+                    .orElseGet(() -> {
+                        Image newImage = new Image();
+                        newImage.setUrl(imageUrl);
+                        newImage.setAlt(productTitle + " - " + colorName);
+                        newImage.setCreatedAt(LocalDateTime.now());
+                        return imageRepository.save(newImage);
+                    });
+                
+                uploadedImages.add(image);
+                
+            } catch (IOException e) {
+                log.error("Error uploading image for color {}: {}", colorName, e.getMessage());
+                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error uploading image: " + e.getMessage());
+            }
+        }
+        
+        return uploadedImages;
+    }
+
+    /**
+     * Assign uploaded images to all ProductDetails of a color
+     */
+    private void assignImagesToProductDetails(List<ProductDetail> productDetails, List<Image> images) {
+        for (ProductDetail productDetail : productDetails) {
+            for (Image image : images) {
+                // Create ProductImage relationship
+                ProductImage productImage = new ProductImage();
+                productImage.setDetail(productDetail);
+                productImage.setImage(image);
+                productImage.setCreatedAt(LocalDateTime.now());
+                productImageRepository.save(productImage);
+            }
         }
     }
 
@@ -460,7 +544,7 @@ public class ProductServiceImpl implements ProductService {
 
         } catch (Exception e) {
             log.error("Database query failed for getAllProducts: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi truy vấn danh sách sản phẩm", e);
+            throw new RuntimeException("Inside ProductServiceImpl.getAllProducts: Error while querying product list", e);
         }
     }
 

@@ -61,8 +61,8 @@ public class ProductController {
             int page,
 
             @RequestParam(defaultValue = "12") @Min(value = 1, message = "PageSize must be >= 1") @Max(value = 100, message = "PageSize cannot exceed 100") int pageSize) {
-        log.info("Inside ProductController.getProductsByCategory category={}, title={}, page={}, pageSize={}",
-                category, title, page, pageSize);
+        log.info("Inside ProductController.getProductsByCategory category={}, title={}, colors={}, sizes={}, priceBucket={}, sortBy={}, page={}, pageSize={}",
+                category, title, colors, sizes, priceBucket, sortBy, page, pageSize);
         
         try {
             PageResult<ProductCardView> result = productService.filterByCategory(
@@ -72,7 +72,7 @@ public class ProductController {
             return ResponseEntity.ok(result);
             
         } catch (Exception e) {
-            log.error("Error filtering products: category={}, error={}", category, e.getMessage(), e);
+            log.error("Inside ProductController.getProductsByCategory error category={}, error={}", category, e.getMessage(), e);
             throw e;
         }
     }
@@ -87,7 +87,7 @@ public class ProductController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Inside ProductController.getProductDetailById error detailId={}, message={}", detailId, e.getMessage(), e);
+            log.error("Inside ProductController.getProductDetailById error detailId={}, error={}", detailId, e.getMessage(), e);
             throw e;
         }
     }
@@ -102,9 +102,10 @@ public class ProductController {
             ProductDetailResponse response = StringUtils.hasText(activeSize)
                     ? productService.getProductDetailByColorAndSize(detailId, activeColor, activeSize)
                     : productService.getProductDetailByColor(detailId, activeColor);
+            log.info("Inside ProductController.getProductDetailByColor success baseDetailId={}, activeColor={}, activeSize={}", detailId, activeColor, activeSize);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Inside ProductController.getProductDetailByColor error baseDetailId={}, activeColor={}, activeSize={}, message={}", detailId, activeColor, activeSize, e.getMessage(), e);
+            log.error("Inside ProductController.getProductDetailByColor error baseDetailId={}, activeColor={}, activeSize={}, error={}", detailId, activeColor, activeSize, e.getMessage(), e);
             throw e;
         }
     }
@@ -116,19 +117,19 @@ public class ProductController {
             @Valid @RequestPart("product") CreateProductRequest request,
             @RequestParam(required = false) MultiValueMap<String, MultipartFile> images
     ) {
-        log.info("Creating new product: {}", request.getTitle());
+        log.info("Inside ProductController.createProduct title={}", request.getTitle());
 
         try {
-            // Parse images by detail index
-            Map<Integer, List<MultipartFile>> imagesByDetail = parseImagesByDetail(images);
+            // Parse images by color ID
+            Map<Short, List<MultipartFile>> imagesByColor = parseImagesByColor(images);
 
-            ProductResponse response = productService.createProduct(request, imagesByDetail);
+            ProductResponse response = productService.createProduct(request, imagesByColor);
 
-            log.info("Successfully created product with ID: {}", response.getId());
+            log.info("Inside ProductController.createProduct success productId={}", response.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (Exception e) {
-            log.error("Error creating product: {}", e.getMessage(), e);
+            log.error("Inside ProductController.createProduct error title={}, error={}", request.getTitle(), e.getMessage(), e);
             throw e;
         }
     }
@@ -140,16 +141,16 @@ public class ProductController {
             @Positive(message = "Product ID must be positive")
             Long id
     ) {
-        log.info("Getting product by ID: {}", id);
+        log.info("Inside ProductController.getProductById productId={}", id);
 
         try {
             ProductResponse response = productService.getProductById(id);
 
-            log.info("Successfully retrieved product ID: {}", id);
+            log.info("Inside ProductController.getProductById success productId={}", id);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error getting product ID {}: {}", id, e.getMessage(), e);
+            log.error("Inside ProductController.getProductById error productId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }
@@ -174,18 +175,18 @@ public class ProductController {
             @Max(value = 100, message = "PageSize cannot exceed 100")
             int pageSize
     ) {
-        log.info("Getting all products with filter: categorySlug={}, title={}, isActive={}, sortBy={}, sortDirection={}, page={}, pageSize={}", 
+        log.info("Inside ProductController.getAllProducts categorySlug={}, title={}, isActive={}, sortBy={}, sortDirection={}, page={}, pageSize={}", 
                 categorySlug, title, isActive, sortBy, sortDirection, page, pageSize);
 
         try {
             PageResult<ProductListResponse> result = productService.getAllProducts(
                     categorySlug, title, isActive, sortBy, sortDirection, page, pageSize);
 
-            log.info("Successfully retrieved {} products", result.totalItems());
+            log.info("Inside ProductController.getAllProducts success totalItems={}", result.totalItems());
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            log.error("Error getting all products: {}", e.getMessage(), e);
+            log.error("Inside ProductController.getAllProducts error categorySlug={}, title={}, error={}", categorySlug, title, e.getMessage(), e);
             throw e;
         }
     }
@@ -207,7 +208,7 @@ public class ProductController {
             @Positive(message = "Size ID must be positive")
             Short sizeId
     ) {
-        log.info("Getting product detail by color and size: productId={}, colorId={}, sizeId={}",
+        log.info("Inside ProductController.getProductDetailByColorAndSize productId={}, colorId={}, sizeId={}",
                 productId, colorId, sizeId);
 
         try {
@@ -215,11 +216,11 @@ public class ProductController {
                     new GetProductDetailByColorAndSizeRequest(productId, colorId, sizeId)
             );
 
-            log.info("Successfully retrieved product detail");
+            log.info("Inside ProductController.getProductDetailByColorAndSize success productId={}, colorId={}, sizeId={}", productId, colorId, sizeId);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error getting product detail by color and size: {}", e.getMessage(), e);
+            log.error("Inside ProductController.getProductDetailByColorAndSize error productId={}, colorId={}, sizeId={}, error={}", productId, colorId, sizeId, e.getMessage(), e);
             throw e;
         }
     }
@@ -233,16 +234,16 @@ public class ProductController {
 
             @Valid @RequestBody UpdateProductRequest request
     ) {
-        log.info("Updating product ID: {}", id);
+        log.info("Inside ProductController.updateProduct productId={}", id);
 
         try {
             ProductResponse response = productService.updateProduct(id, request);
 
-            log.info("Successfully updated product ID: {}", id);
+            log.info("Inside ProductController.updateProduct success productId={}", id);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error updating product ID {}: {}", id, e.getMessage(), e);
+            log.error("Inside ProductController.updateProduct error productId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }
@@ -256,16 +257,16 @@ public class ProductController {
 
             @Valid @RequestBody UpdateProductDetailRequest request
     ) {
-        log.info("Updating product detail ID: {}", detailId);
+        log.info("Inside ProductController.updateProductDetail detailId={}", detailId);
 
         try {
             ProductResponse.ProductDetailResponse response = productService.updateProductDetail(detailId, request);
 
-            log.info("Successfully updated product detail ID: {}", detailId);
+            log.info("Inside ProductController.updateProductDetail success detailId={}", detailId);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error updating product detail ID {}: {}", detailId, e.getMessage(), e);
+            log.error("Inside ProductController.updateProductDetail error detailId={}, error={}", detailId, e.getMessage(), e);
             throw e;
         }
     }
@@ -280,16 +281,16 @@ public class ProductController {
             @Valid @RequestPart("detail") CreateProductDetailRequest request,
             @RequestParam(required = false) List<MultipartFile> images
     ) {
-        log.info("Creating product detail for product ID: {}", productId);
+        log.info("Inside ProductController.createProductDetail productId={}", productId);
 
         try {
             ProductResponse.ProductDetailResponse response = productService.createProductDetail(productId, request, images);
 
-            log.info("Successfully created product detail with ID: {}", response.getId());
+            log.info("Inside ProductController.createProductDetail success productId={}, detailId={}", productId, response.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (Exception e) {
-            log.error("Error creating product detail for product ID {}: {}", productId, e.getMessage(), e);
+            log.error("Inside ProductController.createProductDetail error productId={}, error={}", productId, e.getMessage(), e);
             throw e;
         }
     }
@@ -305,16 +306,16 @@ public class ProductController {
             @NotEmpty(message = "Images cannot be empty")
             List<MultipartFile> newImages
     ) {
-        log.info("Adding images for product detail ID: {}", detailId);
+        log.info("Inside ProductController.addProductDetailImages detailId={}, imageCount={}", detailId, newImages.size());
 
         try {
             ProductResponse.ProductDetailResponse response = productService.addProductDetailImages(detailId, newImages);
 
-            log.info("Successfully added images for product detail ID: {}", detailId);
+            log.info("Inside ProductController.addProductDetailImages success detailId={}, imageCount={}", detailId, newImages.size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error adding images for product detail ID {}: {}", detailId, e.getMessage(), e);
+            log.error("Inside ProductController.addProductDetailImages error detailId={}, imageCount={}, error={}", detailId, newImages.size(), e.getMessage(), e);
             throw e;
         }
     }
@@ -328,16 +329,16 @@ public class ProductController {
 
             @Valid @RequestBody DeleteProductDetailImagesRequest request
     ) {
-        log.info("Deleting images for product detail ID: {}", detailId);
+        log.info("Inside ProductController.deleteProductDetailImages detailId={}, imageUrlCount={}", detailId, request.getImageUrls().size());
 
         try {
             ProductResponse.ProductDetailResponse response = productService.deleteProductDetailImages(detailId, request);
 
-            log.info("Successfully deleted images for product detail ID: {}", detailId);
+            log.info("Inside ProductController.deleteProductDetailImages success detailId={}, imageUrlCount={}", detailId, request.getImageUrls().size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error deleting images for product detail ID {}: {}", detailId, e.getMessage(), e);
+            log.error("Inside ProductController.deleteProductDetailImages error detailId={}, imageUrlCount={}, error={}", detailId, request.getImageUrls().size(), e.getMessage(), e);
             throw e;
         }
     }
@@ -349,16 +350,16 @@ public class ProductController {
             @Positive(message = "Product ID must be positive")
             Long id
     ) {
-        log.info("Deleting product ID: {}", id);
+        log.info("Inside ProductController.deleteProduct productId={}", id);
 
         try {
             productService.deleteProduct(id);
 
-            log.info("Successfully deleted product ID: {}", id);
+            log.info("Inside ProductController.deleteProduct success productId={}", id);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            log.error("Error deleting product ID {}: {}", id, e.getMessage(), e);
+            log.error("Inside ProductController.deleteProduct error productId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }
@@ -370,45 +371,41 @@ public class ProductController {
             @Positive(message = "Product ID must be positive")
             Long id
     ) {
-        log.info("Deleting product detail ID: {}", id);
+        log.info("Inside ProductController.deleteProductDetail detailId={}", id);
 
         try {
             productService.deleteProductDetail(id);
 
-            log.info("Successfully deleted product detail ID: {}", id);
+            log.info("Inside ProductController.deleteProductDetail success detailId={}", id);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            log.error("Error deleting product ID {}: {}", id, e.getMessage(), e);
+            log.error("Inside ProductController.deleteProductDetail error detailId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }
 
     // ============ Helper Methods ============
 
-    private Map<Integer, List<MultipartFile>> parseImagesByDetail(MultiValueMap<String, MultipartFile> images) {
-        Map<Integer, List<MultipartFile>> imagesByDetail = new HashMap<>();
+    private Map<Short, List<MultipartFile>> parseImagesByColor(MultiValueMap<String, MultipartFile> images) {
+        Map<Short, List<MultipartFile>> imagesByColor = new HashMap<>();
 
         if (images != null) {
             images.forEach((key, files) -> {
                 try {
-                    Integer detailIndex = null;
+                    Short colorId = null;
 
-                    // Support keys: "images[detail_0]" or "detail_0"
-                    if (key != null) {
-                        if (key.startsWith("images[detail_") && key.endsWith("]")) {
-                            String idx = key.substring("images[detail_".length(), key.length() - 1);
-                            detailIndex = Integer.parseInt(idx);
-                        } else if (key.startsWith("detail_")) {
-                            detailIndex = Integer.parseInt(key.substring(7));
-                        }
+                    // Support keys: "detail_1", "detail_2", etc. where number is colorId
+                    if (key != null && key.startsWith("detail_")) {
+                        String colorIdStr = key.substring(7); // Remove "detail_" prefix
+                        colorId = Short.parseShort(colorIdStr);
                     }
 
-                    if (detailIndex != null) {
+                    if (colorId != null) {
                         if (files != null && files.size() > 5) {
-                            throw new IllegalArgumentException("Each product variant can only have maximum 5 images");
+                            throw new IllegalArgumentException("Each color variant can only have maximum 5 images");
                         }
-                        imagesByDetail.put(detailIndex, files);
+                        imagesByColor.put(colorId, files);
                     }
                 } catch (NumberFormatException e) {
                     log.warn("Invalid image key format: {}", key);
@@ -416,6 +413,6 @@ public class ProductController {
             });
         }
 
-        return imagesByDetail;
+        return imagesByColor;
     }
 }
