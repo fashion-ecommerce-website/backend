@@ -7,6 +7,7 @@ import com.spring.fit.backend.category.repository.CategoryRepository;
 import com.spring.fit.backend.category.service.CategoryService;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.common.model.response.PageResult;
+import com.spring.fit.backend.product.repository.ProductMainRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ import java.util.function.Function;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ProductMainRepository productMainRepository;
 
     @Override
     public List<CategoryResponse> getCategoryTree() {
@@ -114,15 +116,34 @@ public class CategoryServiceImpl implements CategoryService {
         ));
     }
 
-
-
     @Override
+    @Transactional
     public void toggleCategoryStatus(Long id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
-        category.setIsActive(!category.getIsActive());
-        Category updated = categoryRepository.save(category);
+
+        if (category.getIsActive()) {
+            if (productMainRepository.existsByCategories_Id(id)) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, "Can not inactive this category because this associate with product");
+            }
+            setStatusRecursively(category, false);
+        } else {
+            setStatusRecursively(category, true);
+        }
     }
+
+    private void setStatusRecursively(Category category, boolean status) {
+        category.setIsActive(status);
+        categoryRepository.save(category);
+
+        List<Category> children = categoryRepository.findByParentId(category.getId());
+        for (Category child : children) {
+            setStatusRecursively(child, status);
+        }
+    }
+
+
+
     @Override
     public PageResult<CategoryResponse> searchCategories(String name, Boolean isActive, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page, pageSize);
