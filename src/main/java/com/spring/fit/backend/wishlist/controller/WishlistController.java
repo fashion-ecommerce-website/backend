@@ -35,4 +35,12 @@ public class WishlistController {
         List<ProductDetailResponse> wishlist = wishlistService.getWishlistByUserId(email);
         return ResponseEntity.ok(wishlist);
     }
+
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearWishlists() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        wishlistService.clearWishlistByUser(email);
+        return ResponseEntity.noContent().build();
+    }
+
 }

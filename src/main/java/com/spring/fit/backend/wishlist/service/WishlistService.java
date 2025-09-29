@@ -8,4 +8,5 @@ import java.util.List;
 public interface WishlistService {
       List<ProductDetailResponse> getWishlistByUserId(String userEmail);
       WishlistToggleResponse toggleWishlist(String userEmail, Long detailId);
+      void clearWishlistByUser(String userEmail);
 }
