@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -90,9 +91,40 @@ public class WishlistServiceImpl implements WishlistService {
         return ProductDetailResponse.builder()
                 .detailId(detail.getId())
                 .title(detail.getProduct().getTitle())
+                .description(
+                        List.of(detail.getProduct().getDescription().split(","))
+                )
                 .price(detail.getPrice())
                 .activeColor(detail.getColor().getName())
+                .activeSize(detail.getSize().getLabel())
+                .images(
+                        detail.getProductImages().stream()
+                                .map(pi -> pi.getImage().getUrl())
+                                .toList()
+                )
+                .mapSizeToQuantity(
+                        Map.of(
+                                detail.getSize().getLabel(),
+                                detail.getQuantity()
+                        )
+                )
                 .build();
     }
 
+    @Override
+    @Transactional
+    public void clearWishlistByUser(String userEmail) {
+        UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+
+        List<Wishlist> wishlists = wishlistRepository.findAllByUserId(user.getId());
+
+        if (wishlists.isEmpty()) {
+            log.info("No wishlist items to remove for userId={}", user.getId());
+            return;
+        }
+
+        wishlistRepository.deleteAll(wishlists);
+        log.info("Cleared all wishlist items for userId={}", user.getId());
+    }
 }
