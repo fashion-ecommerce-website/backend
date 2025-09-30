@@ -1,4 +1,4 @@
-package com.spring.fit.backend.order.domain.entity;
+package com.spring.fit.backend.payment.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -10,6 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import com.spring.fit.backend.common.enums.PaymentMethod;
 import com.spring.fit.backend.common.enums.PaymentStatus;
+import com.spring.fit.backend.order.domain.entity.Order;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

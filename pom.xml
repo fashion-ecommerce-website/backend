@@ -109,6 +109,13 @@
 			<artifactId>cloudinary-http44</artifactId>
 			<version>1.37.0</version>
 		</dependency>
+
+		<!-- Stripe Java SDK -->
+		<dependency>
+    		<groupId>com.stripe</groupId>
+    		<artifactId>stripe-java</artifactId>
+    		<version>29.5.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

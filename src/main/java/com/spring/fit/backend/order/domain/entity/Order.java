@@ -2,6 +2,7 @@ package com.spring.fit.backend.order.domain.entity;
 
 import com.spring.fit.backend.common.enums.FulfillmentStatus;
 import com.spring.fit.backend.common.enums.PaymentStatus;
+import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.user.domain.entity.AddressEntity;
 import jakarta.persistence.*;
