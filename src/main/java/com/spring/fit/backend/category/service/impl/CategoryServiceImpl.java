@@ -68,7 +68,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category saved = categoryRepository.save(category);
-        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(),saved.getIsActive(), null);
+        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(), saved.getIsActive(), null);
     }
 
     @Override
@@ -115,48 +115,32 @@ public class CategoryServiceImpl implements CategoryService {
                 )
         ));
     }
+    
+    @Override
+    @Transactional
+    public void toggleCategoryStatus(Long id) {
+        Category root = categoryRepository.findById(id)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
 
-//    @Override
-//    @Transactional
-//    public void toggleCategoryStatus(Long id) {
-//        Category category = categoryRepository.findById(id)
-//                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
-//
-//        if (category.getIsActive()) {
-//            if (productMainRepository.existsByCategories_Id(id)) {
-//                throw new ErrorException(HttpStatus.BAD_REQUEST, "Can not inactive this category because this associate with product");
-//            }
-//            setStatusRecursively(category, false);
-//        } else {
-//            setStatusRecursively(category, true);
-//        }
-//    }
-@Override
-@Transactional
-public void toggleCategoryStatus(Long id) {
-    Category root = categoryRepository.findById(id)
-            .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
+        // Lấy cả cây category (root + children)
+        List<Category> tree = categoryRepository.findCategoryTree(id);
+        List<Long> ids = tree.stream().map(Category::getId).toList();
 
-    // Lấy cả cây category (root + children)
-    List<Category> tree = categoryRepository.findCategoryTree(id);
-    List<Long> ids = tree.stream().map(Category::getId).toList();
+        if (root.getIsActive()) {
+            // Inactive → check product trong toàn bộ cây
+            if (productMainRepository.existsByCategoryIds(ids)) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST,
+                        "Cannot inactive this category tree because one or more categories are associated with products");
+            }
 
-    if (root.getIsActive()) {
-        // Inactive → check product trong toàn bộ cây
-        if (productMainRepository.existsByCategoryIds(ids)) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST,
-                    "Cannot inactive this category tree because one or more categories are associated with products");
+            categoryRepository.updateStatusByIds(ids, false);
+            log.info("Inactive category tree: {}", ids);
+        } else {
+            // Active lại toàn bộ cây
+            categoryRepository.updateStatusByIds(ids, true);
+            log.info("Active category tree: {}", ids);
         }
-
-        categoryRepository.updateStatusByIds(ids, false);
-        log.info("Inactive category tree: {}", ids);
-    } else {
-        // Active lại toàn bộ cây
-        categoryRepository.updateStatusByIds(ids, true);
-        log.info("Active category tree: {}", ids);
     }
-}
-
 
 
     @Override

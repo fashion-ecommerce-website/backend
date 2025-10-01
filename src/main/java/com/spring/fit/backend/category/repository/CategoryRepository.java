@@ -1,7 +1,6 @@
 package com.spring.fit.backend.category.repository;
 
 import com.spring.fit.backend.category.domain.entity.Category;
-import com.spring.fit.backend.common.model.response.PageResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
