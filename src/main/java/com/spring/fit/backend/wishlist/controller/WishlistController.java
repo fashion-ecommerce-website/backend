@@ -1,6 +1,7 @@
 package com.spring.fit.backend.wishlist.controller;
 
 import com.spring.fit.backend.product.domain.dto.response.ProductDetailResponse;
+
 import com.spring.fit.backend.wishlist.domain.dto.WishlistToggleResponse;
 import com.spring.fit.backend.wishlist.service.WishlistService;
 import jakarta.validation.constraints.Positive;
@@ -32,7 +33,7 @@ public class WishlistController {
     @GetMapping()
     public ResponseEntity<List<ProductDetailResponse>> getWishlistByUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<ProductDetailResponse> wishlist = wishlistService.getWishlistByUserId(email);
+        List<ProductDetailResponse> wishlist = wishlistService.getWishlistByUserEmail(email);
         return ResponseEntity.ok(wishlist);
     }
 

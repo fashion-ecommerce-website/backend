@@ -68,7 +68,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category saved = categoryRepository.save(category);
-        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(),saved.getIsActive(), null);
+        return new CategoryResponse(saved.getId(), saved.getName(), saved.getSlug(), saved.getIsActive(), null);
     }
 
     @Override
@@ -115,33 +115,32 @@ public class CategoryServiceImpl implements CategoryService {
                 )
         ));
     }
-
+    
     @Override
     @Transactional
     public void toggleCategoryStatus(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category root = categoryRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Category not found"));
 
-        if (category.getIsActive()) {
-            if (productMainRepository.existsByCategories_Id(id)) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, "Can not inactive this category because this associate with product");
+        // Lấy cả cây category (root + children)
+        List<Category> tree = categoryRepository.findCategoryTree(id);
+        List<Long> ids = tree.stream().map(Category::getId).toList();
+
+        if (root.getIsActive()) {
+            // Inactive → check product trong toàn bộ cây
+            if (productMainRepository.existsByCategoryIds(ids)) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST,
+                        "Cannot inactive this category tree because one or more categories are associated with products");
             }
-            setStatusRecursively(category, false);
+
+            categoryRepository.updateStatusByIds(ids, false);
+            log.info("Inactive category tree: {}", ids);
         } else {
-            setStatusRecursively(category, true);
+            // Active lại toàn bộ cây
+            categoryRepository.updateStatusByIds(ids, true);
+            log.info("Active category tree: {}", ids);
         }
     }
-
-    private void setStatusRecursively(Category category, boolean status) {
-        category.setIsActive(status);
-        categoryRepository.save(category);
-
-        List<Category> children = categoryRepository.findByParentId(category.getId());
-        for (Category child : children) {
-            setStatusRecursively(child, status);
-        }
-    }
-
 
 
     @Override
