@@ -1,0 +1,36 @@
+# Maven
+# ... existing code ...
+target/
+.mvn/
+**/logs/
+
+# Git
+# ... existing code ...
+.git/
+.gitignore
+
+# IDE
+# ... existing code ...
+.vscode/
+.idea/
+*.iml
+
+# OS
+# ... existing code ...
+.DS_Store
+Thumbs.db
+
+# Node leftovers
+# ... existing code ...
+node_modules/
+
+# Env
+# ... existing code ...
+.env
+.env.*
+
+# Tests & reports
+# ... existing code ...
+surefire-reports/
+
+

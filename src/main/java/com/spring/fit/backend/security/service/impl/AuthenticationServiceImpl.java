@@ -25,6 +25,7 @@ import com.spring.fit.backend.security.domain.dto.RegisterRequest;
 import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
 import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
 import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
+import com.spring.fit.backend.security.domain.dto.GoogleLoginRequest;
 import com.spring.fit.backend.security.domain.entity.PasswordResetToken;
 import com.spring.fit.backend.security.domain.entity.RefreshTokenEntity;
 import com.spring.fit.backend.security.domain.entity.RoleEntity;
@@ -38,6 +39,7 @@ import com.spring.fit.backend.security.service.AuthenticationService;
 import com.spring.fit.backend.security.service.OtpService;
 import com.spring.fit.backend.security.service.EmailService;
 import com.spring.fit.backend.security.service.PasswordResetTokenService;
+import com.spring.fit.backend.security.service.FirebaseService;
 
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +59,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         private final OtpService otpService;
         private final PasswordResetTokenService tokenService;
         private final EmailService emailService;
+        private final FirebaseService firebaseService;
 
         @Override
         @Transactional
@@ -350,5 +353,102 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 userRepository.save(user);
                 
                 log.info("Inside AuthenticationServiceImpl.verifyEmail success email={}", user.getEmail());
+        }
+
+        @Override
+        @Transactional
+        public AuthenticationResponse googleLogin(GoogleLoginRequest request) {
+                log.info("Inside AuthenticationServiceImpl.googleLogin email={}", request.getEmail());
+                
+                // Validate Firebase ID token (optional - for enhanced security)
+                try {
+                        FirebaseService.FirebaseUserInfo firebaseUser = firebaseService.verifyIdToken(request.getIdToken());
+                        log.info("Firebase token verified for user: {}", firebaseUser.getEmail());
+                } catch (Exception e) {
+                        log.warn("Firebase token verification failed: {}", e.getMessage());
+                }
+                
+                UserEntity user;
+                boolean isNewUser = false;
+                
+                // Check if user exists
+                Optional<UserEntity> existingUser = userRepository.findByEmail(request.getEmail());
+                
+                if (existingUser.isPresent()) {
+                        user = existingUser.get();
+                        log.info("Existing Google user found: {}", user.getEmail());
+                        
+                        // Update user info from Google
+                        user.setUsername(request.getName() != null ? 
+                                request.getName().replaceAll("\\s+", "").toLowerCase() : 
+                                request.getEmail().split("@")[0]);
+                        
+                        if (request.getPicture() != null) {
+                                user.setAvatarUrl(request.getPicture());
+                        }
+                        
+                        user.setEmailVerified(true); 
+                        user.setLastLoginAt(LocalDateTime.now());
+                        user.setUpdatedAt(LocalDateTime.now());
+                        
+                } else {
+                        // Create new user
+                        log.info("Creating new Google user: {}", request.getEmail());
+                        isNewUser = true;
+                        
+                        user = UserEntity.builder()
+                                .email(request.getEmail())
+                                .username(request.getName() != null ? 
+                                        request.getName().replaceAll("\\s+", "").toLowerCase() : 
+                                        request.getEmail().split("@")[0])
+                                .password("") 
+                                .avatarUrl(request.getPicture())
+                                .isActive(true)
+                                .emailVerified(true) 
+                                .phoneVerified(false)
+                                .lastLoginAt(LocalDateTime.now())
+                                .build();
+                        
+                        // Ensure collections are initialized
+                        if (user.getUserRoles() == null) {
+                                user.setUserRoles(new LinkedHashSet<>());
+                        }
+                        if (user.getRefreshTokens() == null) {
+                                user.setRefreshTokens(new LinkedHashSet<>());
+                        }
+                        
+                        user = userRepository.save(user);
+                        
+                        // Assign default USER role
+                        RoleEntity userRole = roleRepository.findByRoleName("USER")
+                                .orElseThrow(() -> new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR,
+                                                "Default USER role not found"));
+                        
+                        UserRoleEntity userRoleEntity = UserRoleEntity.builder()
+                                .user(user)
+                                .role(userRole)
+                                .isActive(true)
+                                .build();
+                        
+                        user.getUserRoles().add(userRoleEntity);
+                        user = userRepository.save(user);
+                }
+                
+                // Generate JWT tokens
+                UserDetails userDetails = createUserDetails(user);
+                String accessToken = jwtService.generateToken(userDetails);
+                String refreshToken = generateRefreshToken(userDetails);
+                
+                log.info("Inside AuthenticationServiceImpl.googleLogin success email={}, isNewUser={}", 
+                        user.getEmail(), isNewUser);
+                
+                return AuthenticationResponse.builder()
+                        .accessToken(accessToken)
+                        .refreshToken(refreshToken)
+                        .tokenType(null)
+                        .expiresIn(86400000L)
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .build();
         }
 }

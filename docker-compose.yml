@@ -1,6 +1,18 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-fit_db}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
   redis:
     image: redis:7
     container_name: redis
@@ -18,5 +30,57 @@ services:
     depends_on:
       - redis
 
+  app:
+    build: .
+    image: fit-backend:latest
+    container_name: fit-backend
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring Boot / Server
+      - SERVER_PORT=8080
+
+      # Database (overrides application.properties)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-fit_db}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+
+      # Redis
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+
+      # JWT
+      - APP_JWT_SECRET=${APP_JWT_SECRET}
+      - APP_JWT_EXPIRATION=${APP_JWT_EXPIRATION:-86400000}
+      - APP_JWT_REFRESH_EXPIRATION=${APP_JWT_REFRESH_EXPIRATION:-604800000}
+
+      # Email
+      - SPRING_MAIL_HOST=${SPRING_MAIL_HOST:-smtp.gmail.com}
+      - SPRING_MAIL_PORT=${SPRING_MAIL_PORT:-587}
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+      - APP_EMAIL_FROM=${APP_EMAIL_FROM:-noreply@fitapp.com}
+
+      # Cloudinary
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+
+      # Stripe
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_CURRENCY=${STRIPE_CURRENCY:-vnd}
+      - APP_PAYMENT_SUCCESS_URL=${APP_PAYMENT_SUCCESS_URL:-http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}}
+      - APP_PAYMENT_CANCEL_URL=${APP_PAYMENT_CANCEL_URL:-http://localhost:3000/payment/cancel}
+
+    # If you want hot-reload during dev, consider mounting source and using JRebel/Devtools
+    # volumes:
+    #   - ./:/app
+
 volumes:
+  pg-data:
   redis-data:
