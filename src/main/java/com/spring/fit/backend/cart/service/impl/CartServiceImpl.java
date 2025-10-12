@@ -45,20 +45,7 @@ public class CartServiceImpl implements CartService {
             UserEntity user = findUserByEmail(userEmail);
 
             // Find product detail
-            ProductDetail productDetail = productRepository.findById(request.getProductDetailId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
-                        "Cannot found product with ID: " + request.getProductDetailId()));
-
-            // Check if product detail is active
-            if (!productDetail.getIsActive()) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, "Product is unavailable");
-            }
-
-            // Check stock quantity
-            if (productDetail.getQuantity() < request.getQuantity()) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, 
-                    "The quantity (" + request.getQuantity() + ") exceed stock (" + productDetail.getQuantity() + ")");
-            }
+            ProductDetail productDetail = validateAndGetNewProductDetail(request.getProductDetailId(), request.getQuantity());
 
             // Check if product already exists in cart
             Optional<CartDetail> existingCartDetail = cartDetailRepository
@@ -238,9 +225,9 @@ public class CartServiceImpl implements CartService {
     }
 
     private ProductDetail validateAndGetNewProductDetail(Long productDetailId, Integer quantity) {
-        ProductDetail productDetail = productRepository.findById(productDetailId)
+        ProductDetail productDetail = productRepository.findActiveDetailById(productDetailId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
-                    "Product not found with ID: " + productDetailId));
+                    "Product not found or inactive with ID: " + productDetailId));
 
         if (!productDetail.getIsActive()) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Product is not available");

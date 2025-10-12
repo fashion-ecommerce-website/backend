@@ -5,6 +5,7 @@ import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.user.domain.entity.AddressEntity;
+import com.spring.fit.backend.voucher.domain.entity.VoucherUsage;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -99,6 +100,9 @@ public class Order {
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<Shipment> shipments = new LinkedHashSet<>();
+
+    @OneToOne(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private VoucherUsage voucherUsage;
 
     @Override
     public boolean equals(Object o) {
