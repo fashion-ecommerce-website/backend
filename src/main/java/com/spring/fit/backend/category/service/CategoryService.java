@@ -7,7 +7,10 @@ import com.spring.fit.backend.common.model.response.PageResult;
 import java.util.List;
 
 public interface CategoryService {
+    List<CategoryResponse> getActiveCategoryTree();
+
     List<CategoryResponse> getCategoryTree();
+
 
     PageResult<CategoryResponse> getAllCategories(int page, int pageSize);
 
