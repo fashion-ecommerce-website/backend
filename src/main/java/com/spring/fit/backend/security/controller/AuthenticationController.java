@@ -9,12 +9,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.security.domain.dto.AuthenticationRequest;
 import com.spring.fit.backend.security.domain.dto.AuthenticationResponse;
 import com.spring.fit.backend.security.domain.dto.RegisterRequest;
 import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
 import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
 import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
+import com.spring.fit.backend.security.domain.dto.GoogleLoginRequest;
 import com.spring.fit.backend.security.service.AuthenticationService;
 import com.spring.fit.backend.security.service.OtpService;
 
@@ -117,5 +119,16 @@ public class AuthenticationController {
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authenticationService.resetPassword(request);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/google-login")
+    public ResponseEntity<AuthenticationResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        
+        try {
+            AuthenticationResponse response = authenticationService.googleLogin(request);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Google login failed");
+        }
     }
 }

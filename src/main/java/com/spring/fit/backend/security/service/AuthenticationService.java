@@ -6,6 +6,7 @@ import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
 import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
 import com.spring.fit.backend.security.domain.dto.RegisterRequest;
 import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
+import com.spring.fit.backend.security.domain.dto.GoogleLoginRequest;
 
 public interface AuthenticationService {
 
@@ -27,4 +28,6 @@ public interface AuthenticationService {
     void forgotPassword(String email);
 
     void resetPassword(ResetPasswordRequest request);
+
+    AuthenticationResponse googleLogin(GoogleLoginRequest request);
 }

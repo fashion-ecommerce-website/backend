@@ -75,7 +75,7 @@ public class WishlistServiceImpl implements WishlistService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<ProductDetailResponse> getWishlistByUserId(String userEmail) {
+    public List<ProductDetailResponse> getWishlistByUserEmail(String userEmail) {
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
@@ -91,9 +91,6 @@ public class WishlistServiceImpl implements WishlistService {
         return ProductDetailResponse.builder()
                 .detailId(detail.getId())
                 .title(detail.getProduct().getTitle())
-                .description(
-                        List.of(detail.getProduct().getDescription().split(","))
-                )
                 .price(detail.getPrice())
                 .activeColor(detail.getColor().getName())
                 .activeSize(detail.getSize().getLabel())

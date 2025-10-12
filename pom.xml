@@ -116,6 +116,13 @@
     		<artifactId>stripe-java</artifactId>
     		<version>29.5.0</version>
 		</dependency>
+
+		<!-- Firebase Admin SDK for Google authentication verification -->
+		<dependency>
+			<groupId>com.google.firebase</groupId>
+			<artifactId>firebase-admin</artifactId>
+			<version>9.2.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
