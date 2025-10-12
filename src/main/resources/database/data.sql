@@ -22,6 +22,14 @@ INSERT INTO roles (role_name, is_active, created_at, updated_at) VALUES
 ('USER', true, '2024-01-01 08:00:00', '2024-01-01 08:00:00'),
 ('ADMIN', true, '2024-01-01 08:00:00', '2024-01-01 08:00:00');
 
+INSERT INTO user_ranks (code, name)
+VALUES
+    ('BRONZE',   'Bronze'),
+    ('SILVER',   'Silver'),
+    ('GOLD',     'Gold'),
+    ('PLATINUM', 'Platinum'),
+    ('DIAMOND',  'Diamond');
+
 ---- Insert data to table users (20 records)
 -- Password is encoded with BCrypt for "password123"
 INSERT INTO users (id, email, password, username, dob, phone, avatar_url, is_active, email_verified, phone_verified, created_at, updated_at) VALUES

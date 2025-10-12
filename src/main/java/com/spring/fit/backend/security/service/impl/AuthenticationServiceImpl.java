@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.spring.fit.backend.user.domain.entity.UserRank;
+import com.spring.fit.backend.user.repository.UserRankRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -59,6 +61,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         private final OtpService otpService;
         private final PasswordResetTokenService tokenService;
         private final EmailService emailService;
+        private final UserRankRepository userRankRepository;
         private final FirebaseService firebaseService;
 
         @Override
@@ -108,6 +111,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                                 .build();
 
                 user.getUserRoles().add(userRoleEntity);
+
+                UserRank userRank = userRankRepository.findByCode("BRONZE")
+                        .orElseThrow(() -> new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR,
+                                "Default USER rank not found"));
+
+                user.setRankId(userRank.getId());
+
                 userRepository.save(user);
 
                 // Send OTP to email
