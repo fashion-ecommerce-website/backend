@@ -31,6 +31,12 @@ public class CategoryServiceImpl implements CategoryService {
     private final ProductMainRepository productMainRepository;
 
     @Override
+    public List<CategoryResponse> getActiveCategoryTree() {
+        List<Category> all = categoryRepository.findAll();
+        return CategoryResponse.buildActiveTree(all);
+    }
+
+    @Override
     public List<CategoryResponse> getCategoryTree() {
         List<Category> all = categoryRepository.findAll();
         return CategoryResponse.buildTree(all);

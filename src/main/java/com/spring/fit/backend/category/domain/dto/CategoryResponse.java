@@ -54,8 +54,7 @@ public class CategoryResponse {
         return root;
     }
 
-    // Build cây cho tất cả root
-    public static List<CategoryResponse> buildTree(List<Category> allCategories) {
+    public static List<CategoryResponse> buildActiveTree(List<Category> allCategories) {
         List<Category> activeCategories = allCategories.stream()
                 .filter(Category::getIsActive)
                 .collect(Collectors.toList());
@@ -72,6 +71,26 @@ public class CategoryResponse {
         }
 
         List<CategoryResponse> roots = activeCategories.stream()
+                .filter(c -> c.getParent() == null)
+                .map(c -> map.get(c.getId()))
+                .collect(Collectors.toList());
+
+        roots.forEach(CategoryResponse::setEmptyChildrenToNull);
+        return roots;
+    }
+
+    public static List<CategoryResponse> buildTree(List<Category> allCategories) {
+        Map<Long, CategoryResponse> map = mapAll(allCategories);
+        for (Category c : allCategories) {
+            if (c.getParent() != null) {
+                CategoryResponse parentDto = map.get(c.getParent().getId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(map.get(c.getId()));
+                }
+            }
+        }
+
+        List<CategoryResponse> roots = allCategories.stream()
                 .filter(c -> c.getParent() == null)
                 .map(c -> map.get(c.getId()))
                 .collect(Collectors.toList());
