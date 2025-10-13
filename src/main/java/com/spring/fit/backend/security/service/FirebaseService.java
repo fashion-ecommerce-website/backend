@@ -12,3 +12,4 @@ public interface FirebaseService {
         boolean isEmailVerified();
     }
 }
+

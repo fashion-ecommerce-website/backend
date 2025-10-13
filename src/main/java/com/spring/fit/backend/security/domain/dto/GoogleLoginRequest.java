@@ -19,3 +19,4 @@ public class GoogleLoginRequest {
 
     private String picture;
 }
+

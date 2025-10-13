@@ -360,16 +360,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         public AuthenticationResponse googleLogin(GoogleLoginRequest request) {
                 log.info("Inside AuthenticationServiceImpl.googleLogin email={}", request.getEmail());
                 
-                // Validate Firebase ID token (optional - for enhanced security)
-                try {
-                        FirebaseService.FirebaseUserInfo firebaseUser = firebaseService.verifyIdToken(request.getIdToken());
-                        log.info("Firebase token verified for user: {}", firebaseUser.getEmail());
-                } catch (Exception e) {
-                        log.warn("Firebase token verification failed: {}", e.getMessage());
-                }
-                
                 UserEntity user;
-                boolean isNewUser = false;
                 
                 // Check if user exists
                 Optional<UserEntity> existingUser = userRepository.findByEmail(request.getEmail());
@@ -394,7 +385,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 } else {
                         // Create new user
                         log.info("Creating new Google user: {}", request.getEmail());
-                        isNewUser = true;
                         
                         user = UserEntity.builder()
                                 .email(request.getEmail())
@@ -438,9 +428,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 UserDetails userDetails = createUserDetails(user);
                 String accessToken = jwtService.generateToken(userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
-                
-                log.info("Inside AuthenticationServiceImpl.googleLogin success email={}, isNewUser={}", 
-                        user.getEmail(), isNewUser);
                 
                 return AuthenticationResponse.builder()
                         .accessToken(accessToken)
