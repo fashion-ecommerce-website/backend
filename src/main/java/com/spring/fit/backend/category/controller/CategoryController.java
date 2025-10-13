@@ -39,6 +39,10 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getCategoryTree());
     }
 
+    @GetMapping("/active-tree")
+    public ResponseEntity<List<CategoryResponse>> getCategoryActiveTree() {
+        return ResponseEntity.ok(categoryService.getActiveCategoryTree());
+    }
     @GetMapping("/parent/{parentId}")
     public ResponseEntity<CategoryResponse> getCategoryTreeByParent(@PathVariable Long parentId) {
         CategoryResponse category = categoryService.getCategoryTreeByParent(parentId);

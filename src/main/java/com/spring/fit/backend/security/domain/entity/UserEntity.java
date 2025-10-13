@@ -87,6 +87,9 @@ public class UserEntity {
 	@Default
 	private boolean phoneVerified = false;
 
+	@Column(name = "rank_id")
+	private Short rankId;
+
 	// Password reset support
 	@Column(name = "reset_password_token", length = 255)
 	private String resetPasswordToken;
@@ -102,4 +105,8 @@ public class UserEntity {
 	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default
 	private Set<RefreshTokenEntity> refreshTokens = new LinkedHashSet<>();
+
+	@OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+	@Builder.Default
+	private Set<com.spring.fit.backend.voucher.domain.entity.VoucherUsage> voucherUsages = new LinkedHashSet<>();
 }

@@ -278,4 +278,14 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
     ORDER BY s.code
     """, nativeQuery = true)
     List<String> findAllSizesByProductId(@Param("productId") Long productId);
+
+    @Query(value = """
+        SELECT d.*
+        FROM product_details d
+        JOIN products p ON p.id = d.product_id
+        WHERE d.id = :id
+          AND d.is_active = TRUE
+          AND p.is_active = TRUE
+        """, nativeQuery = true)
+    Optional<ProductDetail> findActiveDetailById(@Param("id") Long id);
 }
