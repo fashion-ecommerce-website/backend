@@ -133,9 +133,15 @@ public class VoucherServiceImpl implements VoucherService {
     }
 
     @Override
-    public List<VoucherByUserResponse> getVouchersByUser(Long userId, Double subtotal) {
+    public List<VoucherByUserResponse> getVouchersByUser(Long userId, Double subtotal, String searchCode) {
         LocalDateTime now = LocalDateTime.now();
-        List<Voucher> vouchers = voucherRepository.findAll();
+        
+        List<Voucher> vouchers;
+        if (searchCode != null && !searchCode.trim().isEmpty()) {
+            vouchers = voucherRepository.findByCodeContainingIgnoreCase(searchCode.trim());
+        } else {
+            vouchers = voucherRepository.findAll();
+        }
 
         UserEntity user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));

@@ -49,6 +49,9 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
     Optional<Voucher> findValidVoucherByCodeForUpdate(@Param("code") String code,
                                                      @Param("now") LocalDateTime now,
                                                      @Param("subtotal") Double subtotal);
+
+    @Query("SELECT v FROM Voucher v WHERE LOWER(v.code) LIKE LOWER(CONCAT('%', :searchCode, '%')) AND v.isActive = true")
+    List<Voucher> findByCodeContainingIgnoreCase(@Param("searchCode") String searchCode);
 }
 
 
