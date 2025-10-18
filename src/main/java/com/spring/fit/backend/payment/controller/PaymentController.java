@@ -10,14 +10,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.payment.config.StripeProperties;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutRequest;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResponse;
 import com.spring.fit.backend.payment.service.PaymentService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
-import com.stripe.model.EventDataObjectDeserializer;
-import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,54 +45,26 @@ public class PaymentController {
             HttpServletRequest request) {
         // 1) Validate signature
         if (signatureHeader == null) {
-            return badRequest("Missing signature header");
+            log.warn("Inside PaymentController.stripeWebhook missing signature header");
         }
 
         Event event;
         try {
             event = Webhook.constructEvent(payload, signatureHeader, stripeProperties.getWebhookSecret());
         } catch (SignatureVerificationException e) {
-            log.warn("Webhook signature verification failed", e);
-            return badRequest("Invalid signature");
+            log.warn("Inside PaymentController.stripeWebhook invalid signature");
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Invalid signature");
         }
 
-        // 2) Route event
-        switch (event.getType()) {
-            case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
-            default -> log.debug("Unhandled Stripe event type: {}", event.getType());
-        }
+        // 2) Route event to service
+        paymentService.handleStripeEvent(event);
 
         // 3) Acknowledge receipt
-        return ResponseEntity.ok("received");
+        return ResponseEntity.ok("Inside PaymentController.stripeWebhook received");
     }
 
-    private void handleCheckoutSessionCompleted(Event event) {
-        Session session = extractSession(event);
-        if (session == null || session.getMetadata() == null) {
-            log.warn("checkout.session.completed without session/metadata");
-            return;
-        }
-        String orderIdStr = session.getMetadata().get("orderId");
-        if (orderIdStr == null) {
-            log.warn("checkout.session.completed missing orderId metadata");
-            return;
-        }
-        try {
-            Long orderId = Long.parseLong(orderIdStr);
-            paymentService.handlePaymentSucceeded(orderId, "STRIPE", session.getId());
-        } catch (NumberFormatException ex) {
-            log.warn("Invalid orderId in metadata: {}", orderIdStr);
-        }
-    }
+    // Intentionally left without local handlers; all event handling is in the service
 
-    private Session extractSession(Event event) {
-        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
-        return (Session) deserializer.getObject().orElse(null);
-    }
-
-    private ResponseEntity<String> badRequest(String message) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(message);
-    }
 }
 
 

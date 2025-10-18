@@ -14,6 +14,8 @@ import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutReque
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Event;
+import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
 
@@ -153,6 +155,81 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
         orderRepository.save(order);
+    }
+
+    @Override
+    public void handleStripeEvent(Event event) {
+        switch (event.getType()) {
+            case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
+            case "checkout.session.expired" -> handleCheckoutSessionExpired(event);
+            case "charge.refunded", "refund.created", "charge.refund.updated" -> handleRefunded(event);
+            default -> log.debug("Unhandled Stripe event type: {}", event.getType());
+        }
+    }
+
+    private void handleCheckoutSessionCompleted(Event event) {
+        Session session = extractSession(event);
+        if (session == null || session.getMetadata() == null) {
+            return;
+        }
+        String orderIdStr = session.getMetadata().get("orderId");
+        if (orderIdStr == null) {
+            return;
+        }
+        try {
+            Long orderId = Long.parseLong(orderIdStr);
+            handlePaymentSucceeded(orderId, "STRIPE", session.getId());
+        } catch (NumberFormatException ex) {
+            log.warn("Invalid orderId in checkout.session.completed: {}", orderIdStr);
+        }
+    }
+
+    private void handleCheckoutSessionExpired(Event event) {
+        Session session = extractSession(event);
+        if (session == null || session.getMetadata() == null) {
+            return;
+        }
+        String orderIdStr = session.getMetadata().get("orderId");
+        if (orderIdStr == null) {
+            return;
+        }
+        try {
+            Long orderId = Long.parseLong(orderIdStr);
+            handlePaymentFailed(orderId, "STRIPE", session.getId(), "SESSION_EXPIRED");
+        } catch (NumberFormatException ex) {
+            log.warn("Invalid orderId in checkout.session.expired: {}", orderIdStr);
+        }
+    }
+
+    private void handleRefunded(Event event) {
+        Session session = extractSession(event);
+        if (session == null || session.getMetadata() == null) {
+            // For non-session events, we might not be able to extract Session; skip minimal impl
+            return;
+        }
+        String orderIdStr = session.getMetadata().get("orderId");
+        if (orderIdStr == null) {
+            return;
+        }
+        try {
+            Long orderId = Long.parseLong(orderIdStr);
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
+            order.setPaymentStatus(PaymentStatus.REFUNDED);
+            Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
+                    .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
+            payment.setProvider("STRIPE");
+            payment.setStatus(PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
+            orderRepository.save(order);
+        } catch (NumberFormatException ex) {
+            log.warn("Invalid orderId in refund event: {}", orderIdStr);
+        }
+    }
+
+    private Session extractSession(Event event) {
+        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        return (Session) deserializer.getObject().orElse(null);
     }
 }
 
