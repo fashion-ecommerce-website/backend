@@ -17,6 +17,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Skip tests if commit message contains [skip-tests] or [ci skip]
+    if: "!contains(github.event.head_commit.message, '[skip-tests]') && !contains(github.event.head_commit.message, '[ci skip]')"
     
     steps:
       - name: Checkout code
@@ -39,9 +41,10 @@ jobs:
         run: mvn clean test
 
   build-and-deploy:
+    # Only run if tests pass OR if tests are skipped
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped') && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
 
     steps:
       - name: Checkout code
