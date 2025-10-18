@@ -52,18 +52,19 @@ public class VoucherController {
 
     /**
      * Lấy danh sách voucher theo user
-     * GET /api/vouchers/by-user?subtotal=600000
+     * GET /api/vouchers/by-user?subtotal=600000&searchCode=T10SALE
      */
     @GetMapping("/by-user")
     public ResponseEntity<List<VoucherByUserResponse>> getVouchersByUser(
-            @RequestParam(required = false) Double subtotal) {
+            @RequestParam(required = false) Double subtotal,
+            @RequestParam(required = false) String searchCode) {
 
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity user = userRepository.findActiveUserByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         Long userId = user.getId();
 
-        List<VoucherByUserResponse> responses = voucherService.getVouchersByUser(userId, subtotal);
+        List<VoucherByUserResponse> responses = voucherService.getVouchersByUser(userId, subtotal, searchCode);
         return ResponseEntity.ok(responses);
     }
 
