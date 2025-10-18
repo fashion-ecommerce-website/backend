@@ -37,7 +37,7 @@ jobs:
 
       - name: Tag and push Docker image
         run: |
-          docker tag backend-app:latest thinhnd24/fit-backend:latest
+          docker tag api-app:latest thinhnd24/fit-backend:latest
           docker push thinhnd24/fit-backend:latest
 
       - name: Trigger deploy on Render
