@@ -37,8 +37,8 @@ jobs:
 
       - name: Tag and push Docker image
         run: |
-          docker tag api-app thinhnd24/spring-app
-          docker push thinhnd24/spring-app
+          docker tag backend-app:latest thinhnd24/fit-backend:latest
+          docker push thinhnd24/fit-backend:latest
 
       - name: Trigger deploy on Render
         run: |
