@@ -65,10 +65,10 @@ public class ReviewController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/product/{productId}")
+    @GetMapping("/products/{productDetailId}")
     public ResponseEntity<List<ReviewResponse>> getReviewsByProductId(
-            @PathVariable @Positive(message = "Product ID must be positive") Long productId) {
-        List<ReviewResponse> reviews = reviewService.getReviewsByProductId(productId);
+            @PathVariable @Positive(message = "Product detail ID must be positive") Long productDetailId) {
+        List<ReviewResponse> reviews = reviewService.getReviewsByProductId(productDetailId);
         return ResponseEntity.ok(reviews);
     }
 }
