@@ -1,90 +1,45 @@
-name: CI/CD Pipeline - Fit Backend
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - dev
       - main
-  pull_request:
-    branches:
-      - dev
-      - main
-
-env:
-  DOCKER_IMAGE_NAME: thinhnd24/fit-backend
-  REGISTRY: docker.io
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v1
+
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Build and run Docker containers
+        run: |
+          docker-compose down
+          docker-compose up --build -d 
+
+      - name: Build Docker image
+        run: |
+          docker images
+          docker build -t api-app .
 
       - name: Login to Docker Hub
         run: |
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-
-      - name: Deploy to Render (if main branch)
-        if: github.ref == 'refs/heads/main'
+      - name: Tag and push Docker image
         run: |
-          curl -X POST "https://api.render.com/deploy/srv-d045p0adbo4c73e9iv9g?key=${{ secrets.RENDER_DEPLOY_KEY }}"
+          docker tag api-app thinhnd24/spring-app
+          docker push thinhnd24/spring-app
 
-      - name: Notify deployment status
-        if: always()
+      - name: Trigger deploy on Render
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment successful!"
-          else
-            echo "❌ Deployment failed!"
-          fi
-
-  security-scan:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+          curl -X POST https://api.render.com/deploy/srv-d045p0adbo4c73e9iv9g?key=xtiRl3rX5lo
