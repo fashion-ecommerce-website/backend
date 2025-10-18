@@ -131,17 +131,18 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Inside ReviewServiceImpl.deleteReview success userId={}, reviewId={}", user.getId(), reviewId);
     }
 
-
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByProductId(Long productId) {
-        log.info("Inside ReviewServiceImpl.getReviewsByProductId productId={}", productId);
-
+    public List<ReviewResponse> getReviewsByProductId(Long productDetailId) {
+        log.info("Inside ReviewServiceImpl.getReviewsByProductId productDetailId={}", productDetailId);
+        ProductDetail productDetail = productDetailRepository.findById(productDetailId)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found"));
+        Long productId = productDetail.getProduct().getId();
         List<Review> reviews = reviewRepository.findAllByProductId(productId);
-
         return reviews.stream()
                 .map(ReviewResponse::fromEntity)
                 .collect(Collectors.toList());
     }
+
 }
 
