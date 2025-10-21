@@ -11,6 +11,9 @@ import com.spring.fit.backend.product.domain.dto.response.*;
 import com.spring.fit.backend.product.domain.entity.*;
 import com.spring.fit.backend.product.repository.*;
 import com.spring.fit.backend.product.service.ProductService;
+import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
+import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
+import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.user.service.RecentViewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +49,7 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final ImageService imageService;
     private final RecentViewService recentViewService;
+    private final PromotionService promotionService;
     
     private static final Map<String, BigDecimal[]> PRICE_BUCKET_MAP = Map.of(
             "<1m", new BigDecimal[]{null, BigDecimal.valueOf(1_000_000)},
@@ -58,7 +62,7 @@ public class ProductServiceImpl implements ProductService {
     private static final String DEFAULT_SORT_DIRECTION = "asc";
 
     @Override
-    public PageResult<ProductCardView> filterByCategory(
+    public PageResult<ProductCardWithPromotionResponse> filterByCategory(
             String categorySlug,
             String title,
             List<String> colorNames,
@@ -104,12 +108,146 @@ public class ProductServiceImpl implements ProductService {
             log.debug("Query completed: found {} total items, returned {} items", 
                     pageResult.getTotalElements(), pageResult.getContent().size());
             
-            return PageResult.from(pageResult);
+            // Map thêm giá sau khuyến mãi cho từng SKU
+            List<ProductCardWithPromotionResponse> items = pageResult.getContent().stream()
+                .map(card -> {
+                    var applyRes = PromotionApplyResponse.builder().build();
+                    try {
+                        var applyReq = PromotionApplyRequest.builder()
+                                .skuId(card.getDetailId())
+                                .basePrice(card.getPrice())
+                                .build();
+                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                    } catch (Exception ex) {
+                        // fallback giữ nguyên giá nếu có lỗi
+                        applyRes = PromotionApplyResponse.builder()
+                                .basePrice(card.getPrice())
+                                .finalPrice(card.getPrice())
+                                .percentOff(0)
+                                .build();
+                    }
+                    return ProductCardWithPromotionResponse.builder()
+                            .detailId(card.getDetailId())
+                            .productTitle(card.getProductTitle())
+                            .productSlug(card.getProductSlug())
+                            .colorName(card.getColorName())
+                            .price(card.getPrice())
+                            .finalPrice(applyRes.getFinalPrice())
+                            .percentOff(applyRes.getPercentOff())
+                            .promotionId(applyRes.getPromotionId())
+                            .promotionName(applyRes.getPromotionName())
+                            .quantity(card.getQuantity())
+                            .colors(card.getColors())
+                            .imageUrls(card.getImageUrls())
+                            .build();
+                })
+                .toList();
+
+            return new PageResult<>(
+                    items,
+                    pageResult.getNumber(),
+                    pageResult.getSize(),
+                    pageResult.getTotalElements(),
+                    pageResult.getTotalPages(),
+                    pageResult.hasNext(),
+                    pageResult.hasPrevious()
+            );
             
         } catch (Exception e) {
             log.error("Database query failed for category={}: {}", categorySlug, e.getMessage(), e);
             throw new RuntimeException("Lỗi khi truy vấn dữ liệu sản phẩm", e);
         }
+    }
+
+    @Override
+    public PageResult<ProductCardWithPromotionResponse> filterDiscounted(
+            String title,
+            List<String> colorNames,
+            List<String> sizeCodes,
+            String priceBucket,
+            String sortBy,
+            int page,
+            int pageSize) {
+
+        // Truy vấn đến (page+1)*pageSize để có đủ dữ liệu sau khi lọc theo khuyến mãi
+        BigDecimal[] priceRange = mapPriceBucket(priceBucket);
+        BigDecimal min = priceRange[0];
+        BigDecimal max = priceRange[1];
+        SortParams sortParams = parseSortParameters(sortBy);
+        FilterParams filterParams = normalizeFilters(title, colorNames, sizeCodes);
+
+        int fetchSize = Math.max(pageSize, (page + 1) * pageSize);
+        Pageable fetchPageable = PageRequest.of(0, fetchSize);
+
+        Page<ProductCardView> fetched = productRepository.filterProducts(
+                null,
+                filterParams.title(),
+                filterParams.colors(),
+                filterParams.sizes(),
+                min,
+                max,
+                filterParams.colorsEmpty(),
+                filterParams.sizesEmpty(),
+                sortParams.field(),
+                sortParams.direction(),
+                fetchPageable
+        );
+
+        List<ProductCardWithPromotionResponse> enriched = fetched.getContent().stream()
+                .map(card -> {
+                    var applyRes = PromotionApplyResponse.builder().build();
+                    try {
+                        var applyReq = PromotionApplyRequest.builder()
+                                .skuId(card.getDetailId())
+                                .basePrice(card.getPrice())
+                                .build();
+                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                    } catch (Exception ex) {
+                        applyRes = PromotionApplyResponse.builder()
+                                .basePrice(card.getPrice())
+                                .finalPrice(card.getPrice())
+                                .percentOff(0)
+                                .build();
+                    }
+                    return ProductCardWithPromotionResponse.builder()
+                            .detailId(card.getDetailId())
+                            .productTitle(card.getProductTitle())
+                            .productSlug(card.getProductSlug())
+                            .colorName(card.getColorName())
+                            .price(card.getPrice())
+                            .finalPrice(applyRes.getFinalPrice())
+                            .percentOff(applyRes.getPercentOff())
+                            .promotionId(applyRes.getPromotionId())
+                            .promotionName(applyRes.getPromotionName())
+                            .quantity(card.getQuantity())
+                            .colors(card.getColors())
+                            .imageUrls(card.getImageUrls())
+                            .build();
+                })
+                .filter(item -> item.getPromotionId() != null
+                        && item.getFinalPrice() != null
+                        && item.getPrice() != null
+                        && item.getFinalPrice().compareTo(item.getPrice()) < 0)
+                .toList();
+
+        long totalItems = enriched.size();
+        int totalPages = (int) Math.ceil(totalItems / (double) pageSize);
+        int fromIndex = Math.min(page * pageSize, enriched.size());
+        int toIndex = Math.min(fromIndex + pageSize, enriched.size());
+        List<ProductCardWithPromotionResponse> pageItems = enriched.subList(fromIndex, toIndex);
+
+        boolean hasPrevious = page > 0;
+        boolean hasNext = page + 1 < totalPages;
+
+        return new PageResult<>(
+                pageItems,
+                page,
+                pageSize,
+                totalItems,
+                totalPages,
+                hasNext,
+                hasPrevious
+        );
     }
     
     
@@ -208,6 +346,78 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public List<ProductCardWithPromotionResponse> getRecentlyViewedProductsWithPromotion(List<Long> productIds, Long userId) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        
+        log.debug("Getting recently viewed products with promotion for IDs: {}", productIds);
+        
+        try {
+            // Convert Long to Integer for repository method
+            List<Integer> integerIds = productIds.stream()
+                    .map(Long::intValue)
+                    .toList();
+            
+            List<ProductCardView> products = productRepository.findRecentlyViewedProduct(integerIds);
+
+            // Lấy ra danh sách detailId đã có trong products
+            Set<Long> existingDetailIds = products.stream()
+                    .map(ProductCardView::getDetailId)
+                    .collect(Collectors.toSet());
+
+            List<Long> duplicateProductColors = productIds.stream()
+                    .filter(id -> !existingDetailIds.contains(id))
+                    .toList();
+
+            recentViewService.removeSelected(userId, duplicateProductColors);
+
+            // Áp dụng promotion cho từng sản phẩm
+            List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
+                    .map(card -> {
+                        var applyRes = PromotionApplyResponse.builder().build();
+                        try {
+                            var applyReq = PromotionApplyRequest.builder()
+                                    .skuId(card.getDetailId())
+                                    .basePrice(card.getPrice())
+                                    .build();
+                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        } catch (Exception ex) {
+                            // fallback giữ nguyên giá nếu có lỗi
+                            applyRes = PromotionApplyResponse.builder()
+                                    .basePrice(card.getPrice())
+                                    .finalPrice(card.getPrice())
+                                    .percentOff(0)
+                                    .build();
+                        }
+                        return ProductCardWithPromotionResponse.builder()
+                                .detailId(card.getDetailId())
+                                .productTitle(card.getProductTitle())
+                                .productSlug(card.getProductSlug())
+                                .colorName(card.getColorName())
+                                .price(card.getPrice())
+                                .finalPrice(applyRes.getFinalPrice())
+                                .percentOff(applyRes.getPercentOff())
+                                .promotionId(applyRes.getPromotionId())
+                                .promotionName(applyRes.getPromotionName())
+                                .quantity(card.getQuantity())
+                                .colors(card.getColors())
+                                .imageUrls(card.getImageUrls())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            log.debug("Found {} recently viewed products with promotion", enrichedProducts.size());
+            
+            return enrichedProducts;
+            
+        } catch (Exception e) {
+            log.error("Error getting recently viewed products with promotion: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây với promotion", e);
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailById(Long detailId) {
         log.info("Inside ProductServiceImpl.getProductDetailById detailId={}", detailId);
@@ -290,6 +500,42 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public ProductDetailWithPromotionResponse getProductDetailByIdWithPromotion(Long detailId) {
+        ProductDetailResponse base = getProductDetailById(detailId);
+        var applyRes = PromotionApplyResponse.builder().build();
+        try {
+            var applyReq = PromotionApplyRequest.builder()
+                    .skuId(base.getDetailId())
+                    .basePrice(base.getPrice())
+                    .build();
+            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+        } catch (Exception ex) {
+            applyRes = PromotionApplyResponse.builder()
+                    .basePrice(base.getPrice())
+                    .finalPrice(base.getPrice())
+                    .percentOff(0)
+                    .build();
+        }
+
+        return ProductDetailWithPromotionResponse.builder()
+                .detailId(base.getDetailId())
+                .title(base.getTitle())
+                .price(base.getPrice())
+                .finalPrice(applyRes.getFinalPrice())
+                .percentOff(applyRes.getPercentOff())
+                .promotionId(applyRes.getPromotionId())
+                .promotionName(applyRes.getPromotionName())
+                .activeColor(base.getActiveColor())
+                .activeSize(base.getActiveSize())
+                .images(base.getImages())
+                .colors(base.getColors())
+                .mapSizeToQuantity(base.getMapSizeToQuantity())
+                .description(base.getDescription())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailByColor(Long baseDetailId, String activeColor) {
         log.info("Inside ProductServiceImpl.getProductDetailByColor baseDetailId={}, color={}", baseDetailId, activeColor);
         Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, null);
@@ -298,10 +544,24 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public ProductDetailWithPromotionResponse getProductDetailByColorWithPromotion(Long baseDetailId, String activeColor) {
+        Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, null);
+        return getProductDetailByIdWithPromotion(resolvedDetailId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailByColorAndSize(Long baseDetailId, String activeColor, String activeSize) {
         log.info("Inside getProductDetailByColorAndSize.ProductServiceImpl getProductDetail baseDetailId={}, color={}, size={}", baseDetailId, activeColor, activeSize);
         Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, activeSize);
         return getProductDetailById(resolvedDetailId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailWithPromotionResponse getProductDetailByColorAndSizeWithPromotion(Long baseDetailId, String activeColor, String activeSize) {
+        Long resolvedDetailId = resolveDetailId(baseDetailId, activeColor, activeSize);
+        return getProductDetailByIdWithPromotion(resolvedDetailId);
     }
 
     private Long resolveDetailId(Long baseDetailId, String activeColor, String activeSize) {

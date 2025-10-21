@@ -1,6 +1,6 @@
 package com.spring.fit.backend.wishlist.controller;
 
-import com.spring.fit.backend.product.domain.dto.response.ProductDetailResponse;
+import com.spring.fit.backend.product.domain.dto.response.ProductDetailWithPromotionResponse;
 
 import com.spring.fit.backend.wishlist.domain.dto.WishlistToggleResponse;
 import com.spring.fit.backend.wishlist.service.WishlistService;
@@ -31,9 +31,9 @@ public class WishlistController {
 
 
     @GetMapping()
-    public ResponseEntity<List<ProductDetailResponse>> getWishlistByUser() {
+    public ResponseEntity<List<ProductDetailWithPromotionResponse>> getWishlistByUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<ProductDetailResponse> wishlist = wishlistService.getWishlistByUserEmail(email);
+        List<ProductDetailWithPromotionResponse> wishlist = wishlistService.getWishlistByUserEmailWithPromotion(email);
         return ResponseEntity.ok(wishlist);
     }
 

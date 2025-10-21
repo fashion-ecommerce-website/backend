@@ -223,7 +223,7 @@ public class PromotionServiceImpl implements PromotionService {
 
             BigDecimal discount;
             if (promo.getType() == PromotionType.PERCENT) {
-                discount = basePrice.multiply(promo.getValue()).divide(java.math.BigDecimal.valueOf(100));
+                discount = basePrice.multiply(promo.getValue()).divide(BigDecimal.valueOf(100));
             } else {
                 discount = promo.getValue();
             }

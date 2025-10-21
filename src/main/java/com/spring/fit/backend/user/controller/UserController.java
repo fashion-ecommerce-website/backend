@@ -1,6 +1,6 @@
 package com.spring.fit.backend.user.controller;
 
-import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -60,9 +60,9 @@ public class UserController {
     }
 
     @GetMapping("/recently")
-    public ResponseEntity<List<ProductCardView>> getRecentlyProducts() {
+    public ResponseEntity<List<ProductCardWithPromotionResponse>> getRecentlyProducts() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<ProductCardView> recentProducts = userService.getRecentlyViewedProducts(email);
+        List<ProductCardWithPromotionResponse> recentProducts = userService.getRecentlyViewedProductsWithPromotion(email);
         return ResponseEntity.ok(recentProducts);
     }
 

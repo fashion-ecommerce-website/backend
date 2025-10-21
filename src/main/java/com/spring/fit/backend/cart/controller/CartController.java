@@ -2,6 +2,7 @@ package com.spring.fit.backend.cart.controller;
 
 import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
 import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.CartDetailWithPromotionResponse;
 import com.spring.fit.backend.cart.domain.dto.RemoveFromCartRequest;
 import com.spring.fit.backend.cart.domain.dto.UpdateCartItemRequest;
 import com.spring.fit.backend.cart.service.CartService;
@@ -33,9 +34,9 @@ public class CartController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CartDetailResponse>> getCartItems() {
+    public ResponseEntity<List<CartDetailWithPromotionResponse>> getCartItems() {
         String email = getCurrentUserEmail();
-        List<CartDetailResponse> cartItems = cartService.getCartItems(email);
+        List<CartDetailWithPromotionResponse> cartItems = cartService.getCartItemsWithPromotion(email);
         return ResponseEntity.ok(cartItems);
     }
 
