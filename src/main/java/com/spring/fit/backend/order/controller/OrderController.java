@@ -16,14 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -98,18 +94,16 @@ public class OrderController {
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) FulfillmentStatus status,
             @RequestParam(required = false) PaymentStatus paymentStatus,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String direction,
             @PageableDefault(size = 20) Pageable pageable) {
 
         log.info(
-                "Inside OrderController.getAllOrders getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, startDate: {}, endDate: {}",
-                userId, status, paymentStatus, startDate, endDate);
+                "Inside OrderController.getAllOrders getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, sortBy: {}, direction: {}",
+                userId, status, paymentStatus, sortBy, direction);
 
-        Page<OrderResponse> response = orderService.getAllOrdersWithFilters(userId, status, paymentStatus, startDate,
-                endDate, pageable);
+        Page<OrderResponse> response = orderService.getAllOrdersWithFilters(userId, status, paymentStatus, sortBy, direction, pageable);
 
         return ResponseEntity.ok(response);
     }
-
 }

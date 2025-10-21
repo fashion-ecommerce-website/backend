@@ -41,7 +41,7 @@ public class OrderDetailPromotion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "promotion_id")
-    private Promotion promotion; // có thể null nếu chỉ snapshot tên
+    private Promotion promotion; 
 
     @Column(name = "promotion_name", columnDefinition = "text")
     private String promotionName;

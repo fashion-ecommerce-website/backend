@@ -1,14 +1,11 @@
 package com.spring.fit.backend.order.domain.dto.request;
 
 import com.spring.fit.backend.common.enums.PaymentMethod;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -33,6 +30,8 @@ public class CreateOrderRequest {
 
     private Long totalAmount;
 
+    private String voucherCode;
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -41,6 +40,8 @@ public class CreateOrderRequest {
         private Long productDetailId;
 
         private Integer quantity;
+
+        private Long promotionId;
 
     }
 }

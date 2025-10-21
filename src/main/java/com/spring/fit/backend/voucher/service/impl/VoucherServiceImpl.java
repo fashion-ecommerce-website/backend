@@ -1,9 +1,9 @@
 package com.spring.fit.backend.voucher.service.impl;
 
-import com.cloudinary.api.exceptions.BadRequest;
 import com.spring.fit.backend.common.enums.AudienceType;
 import com.spring.fit.backend.common.enums.VoucherType;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
+import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
@@ -28,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +53,7 @@ public class VoucherServiceImpl implements VoucherService {
 
     @Override
     public VoucherValidateResponse validateVoucher(VoucherValidateRequest request, Long userId) {
-        log.info("Validating voucher code: {} for user: {}", request.getCode(), userId);
+        log.info("Inside VoucherServiceImpl.validateVoucher, validating voucher code: {} for user: {}", request.getCode(), userId);
 
         // 1. Find voucher by code
         Voucher voucher = voucherRepository.findValidVoucherByCode(
@@ -80,7 +81,7 @@ public class VoucherServiceImpl implements VoucherService {
                  .code(voucher.getCode())
                  .message("Voucher usage limit exceeded")
                  .build();
-         }
+        }
 
         // 4. Check audience type (RANK)
          if (!checkAudienceType(voucher, user)) {
@@ -200,14 +201,14 @@ public class VoucherServiceImpl implements VoucherService {
 
     @Override
     @Transactional
-    public void applyVoucher(VoucherValidateRequest request, Long userId, Long orderId) throws BadRequest {
+    public void applyVoucher(VoucherValidateRequest request, Long userId, Long orderId) {
         // Lock voucher row to avoid race conditions
         Voucher voucher = voucherRepository.findValidVoucherByCodeForUpdate(
                 request.getCode(), LocalDateTime.now(), request.getSubtotal())
                 .orElse(null);
 
         if (voucher == null) {
-            throw new BadRequest("Voucher not found");
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher not found");
         }
 
         // Calculate discount

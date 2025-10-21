@@ -50,6 +50,9 @@ public class OrderDetail {
     @Column(name = "total_price", precision = 12, scale = 2)
     private BigDecimal totalPrice;
 
+    @Column(name = "promotion_id")
+    private Long promotionId;
+
     @PrePersist
     @PreUpdate
     public void calculateTotalPrice() {

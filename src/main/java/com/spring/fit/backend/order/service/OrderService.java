@@ -8,8 +8,6 @@ import com.spring.fit.backend.order.domain.dto.response.OrderResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDateTime;
-
 public interface OrderService {
 
     OrderResponse createOrder(Long userId, CreateOrderRequest request);
@@ -24,23 +22,6 @@ public interface OrderService {
 
     Page<OrderResponse> getAllOrders(Pageable pageable);
 
-    Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByUserId(Long userId, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByStatus(FulfillmentStatus status, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByPaymentStatus(PaymentStatus paymentStatus, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByUserIdAndStatus(Long userId, FulfillmentStatus status, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByUserIdAndPaymentStatus(Long userId, PaymentStatus paymentStatus, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByDateRange(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
-
-    Page<OrderResponse> getOrdersByUserIdAndDateRange(Long userId, LocalDateTime startDate, LocalDateTime endDate,
-            Pageable pageable);
-
-    OrderResponse calculateOrderTotals(Long id);
+    Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus, String sortBy, String direction, Pageable pageable);
+    
 }

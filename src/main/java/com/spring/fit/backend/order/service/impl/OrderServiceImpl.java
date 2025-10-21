@@ -15,6 +15,9 @@ import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.user.repository.AddressRepository;
+import com.spring.fit.backend.voucher.domain.entity.Voucher;
+import com.spring.fit.backend.voucher.repository.VoucherRepository;
+import com.spring.fit.backend.common.util.PagingUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,23 +41,35 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final ProductDetailRepository productDetailRepository;
+    private final VoucherRepository voucherRepository;
 
     @Override
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
 
         if (userId == null) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, "User ID is required for order creation");
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Inside OrderServiceImpl.createOrder, user ID is required for order creation");
         }
 
         var user = userRepository.findById(userId)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found with id: " + userId));
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside OrderServiceImpl.createOrder, user not found with id: " + userId));
 
         var shippingAddress = addressRepository.findById(request.getShippingAddressId())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
-                        "Shipping address not found with id: " + request.getShippingAddressId()));
+                        "Inside OrderServiceImpl.createOrder, shipping address not found with id: " + request.getShippingAddressId()));
 
         if (!shippingAddress.getUser().getId().equals(userId)) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, "Shipping address does not belong to user");
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Inside OrderServiceImpl.createOrder, shipping address does not belong to user");
+        }
+
+        // Handle voucher if provided - validate and set voucher relationship
+        Voucher voucher = null;
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            voucher = voucherRepository.findValidVoucherByCode(
+                    request.getVoucherCode(), 
+                    LocalDateTime.now(), 
+                    request.getSubtotalAmount().doubleValue()
+            ).orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, 
+                    "Inside OrderServiceImpl.createOrder, invalid or expired voucher code: {}" + request.getVoucherCode()));
         }
 
         // Create order
@@ -68,13 +83,17 @@ public class OrderServiceImpl implements OrderService {
                 .totalAmount(BigDecimal.valueOf(request.getTotalAmount()))
                 .status(FulfillmentStatus.UNFULFILLED)
                 .paymentStatus(PaymentStatus.UNPAID)
+                .voucher(voucher != null ? voucher : null)
                 .build();
 
         // Create order details
         for (var detailRequest : request.getOrderDetails()) {
             var productDetail = productDetailRepository.findById(detailRequest.getProductDetailId())
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
-                            "Product detail not found with id: " + detailRequest.getProductDetailId()));
+                            "Inside OrderServiceImpl.createOrder, product detail not found with id: " + detailRequest.getProductDetailId()));
+
+            // Get promotion ID if provided
+            Long promotionId = detailRequest.getPromotionId();
 
             var orderDetail = OrderDetail.builder()
                     .order(order)
@@ -84,6 +103,7 @@ public class OrderServiceImpl implements OrderService {
                     .sizeLabel(productDetail.getSize().getLabel())
                     .quantity(detailRequest.getQuantity())
                     .unitPrice(productDetail.getPrice())
+                    .promotionId(promotionId)
                     .build();
 
             order.getOrderDetails().add(orderDetail);
@@ -109,26 +129,26 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(Long id) {
-        log.info("Getting order by id: {}", id);
+        log.info("Inside OrderServiceImpl.getOrderById, getting order by id: {}", id);
         var order = orderRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside OrderServiceImpl.getOrderById, order not found with id: " + id));
         return mapToResponse(order);
     }
 
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderByIdWithAllRelations(Long id) {
-        log.info("Getting order with all relations by id: {}", id);
+        log.info("Inside OrderServiceImpl.getOrderByIdWithAllRelations, getting order with all relations by id: {}", id);
         var order = orderRepository.findByIdWithAllRelations(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside OrderServiceImpl.getOrderByIdWithAllRelations, order not found with id: " + id));
         return mapToResponse(order);
     }
 
     @Override
     public OrderResponse updateOrder(Long id, UpdateOrderRequest request) {
-        log.info("Updating order with id: {}", id);
+        log.info("Inside OrderServiceImpl.updateOrder, updating order with id: {}", id);
         var order = orderRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside OrderServiceImpl.updateOrder, order not found with id: " + id));
 
         // Update fields if provided
         if (request.getStatus() != null) {
@@ -157,7 +177,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         var savedOrder = orderRepository.save(order);
-        log.info("Order updated successfully with id: {}", savedOrder.getId());
+        log.info("Inside OrderServiceImpl.updateOrder, order updated successfully with id: {}", savedOrder.getId());
 
         return mapToResponse(savedOrder);
     }
@@ -182,92 +202,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status,
-            PaymentStatus paymentStatus, LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable) {
+    public Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus, String sortBy, String direction, Pageable pageable) {
         log.info(
-                "Getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, startDate: {}, endDate: {}",
-                userId, status, paymentStatus, startDate, endDate);
+                "Inside OrderServiceImpl.getAllOrdersWithFilters, getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, sortBy: {}, direction: {}",
+                userId, status, paymentStatus, sortBy, direction);
 
-        return orderRepository.findAllWithFilters(userId, status, paymentStatus, startDate, endDate, pageable)
+        // Build Pageable with sorting using utility
+        Pageable sortedPageable = PagingUtils.buildPageableWithSorting(pageable, sortBy, direction);
+
+        return orderRepository.findAllWithFilters(userId, status, paymentStatus, sortedPageable)
                 .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByUserId(Long userId, Pageable pageable) {
-        log.info("Getting orders by user id: {}", userId);
-        return orderRepository.findByUserId(userId, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByStatus(FulfillmentStatus status, Pageable pageable) {
-        log.info("Getting orders by status: {}", status);
-        return orderRepository.findByStatus(status, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByPaymentStatus(PaymentStatus paymentStatus, Pageable pageable) {
-        log.info("Getting orders by payment status: {}", paymentStatus);
-        return orderRepository.findByPaymentStatus(paymentStatus, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByUserIdAndStatus(Long userId, FulfillmentStatus status, Pageable pageable) {
-        log.info("Getting orders by user id: {} and status: {}", userId, status);
-        return orderRepository.findByUserIdAndStatus(userId, status, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByUserIdAndPaymentStatus(Long userId, PaymentStatus paymentStatus,
-            Pageable pageable) {
-        log.info("Getting orders by user id: {} and payment status: {}", userId, paymentStatus);
-        return orderRepository.findByUserIdAndPaymentStatus(userId, paymentStatus, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByDateRange(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        log.info("Getting orders by date range: {} to {}", startDate, endDate);
-        return orderRepository.findByDateRange(startDate, endDate, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByUserIdAndDateRange(Long userId, LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable) {
-        log.info("Getting orders by user id: {} and date range: {} to {}", userId, startDate, endDate);
-        return orderRepository.findByUserIdAndDateRange(userId, startDate, endDate, pageable)
-                .map(this::mapToResponse);
-    }
-
-    @Override
-    public OrderResponse calculateOrderTotals(Long id) {
-        log.info("Calculating order totals for id: {}", id);
-        var order = orderRepository.findByIdWithDetails(id)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + id));
-
-        BigDecimal subtotalAmount = order.getOrderDetails().stream()
-                .map(OrderDetail::getTotalPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        order.setSubtotalAmount(subtotalAmount);
-        order.setTotalAmount(subtotalAmount.add(order.getDiscountAmount()).add(order.getShippingFee()));
-
-        var savedOrder = orderRepository.save(order);
-        log.info("Order totals calculated successfully for id: {}", id);
-
-        return mapToResponse(savedOrder);
     }
 
     private OrderResponse mapToResponse(Order order) {
@@ -290,6 +234,7 @@ public class OrderServiceImpl implements OrderService {
                 .orderDetails(mapOrderDetailsToResponse(order.getOrderDetails()))
                 .payments(mapPaymentsToResponse(order.getPayments()))
                 .shipments(mapShipmentsToResponse(order.getShipments()))
+                .voucherCode(order.getVoucher() != null ? order.getVoucher().getCode() : null)
                 .build();
     }
 
@@ -350,4 +295,6 @@ public class OrderServiceImpl implements OrderService {
                         .build())
                 .collect(Collectors.toList());
     }
+
+
 }

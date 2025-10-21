@@ -11,7 +11,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -74,20 +73,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         "WHERE o.id = :id")
         Optional<Order> findByIdWithAllRelations(@Param("id") Long id);
 
-        // Find all orders with optional filters (native for performance and
-        // flexibility)
-        @Query(value = """
-                        SELECT * FROM orders o
-                        WHERE (:userId IS NULL OR o.user_id = :userId)
-                          AND (:status IS NULL OR o.status = CAST(:status AS varchar))
-                          AND (:paymentStatus IS NULL OR o.payment_status = CAST(:paymentStatus AS varchar))
-                          AND (:startDate IS NULL OR o.created_at >= :startDate)
-                          AND (:endDate IS NULL OR o.created_at <= :endDate)
-                        """, nativeQuery = true)
+        // Find all orders with optional filters using JPQL for better type safety
+        @Query("SELECT o FROM Order o WHERE " +
+               "(:userId IS NULL OR o.user.id = :userId) AND " +
+               "(:status IS NULL OR o.status = :status) AND " +
+               "(:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus)")
         Page<Order> findAllWithFilters(@Param("userId") Long userId,
                         @Param("status") FulfillmentStatus status,
                         @Param("paymentStatus") PaymentStatus paymentStatus,
-                        @Param("startDate") LocalDateTime startDate,
-                        @Param("endDate") LocalDateTime endDate,
                         Pageable pageable);
 }

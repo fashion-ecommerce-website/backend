@@ -35,6 +35,7 @@ public class OrderResponse {
     private List<OrderDetailResponse> orderDetails;
     private List<PaymentResponse> payments;
     private List<ShipmentResponse> shipments;
+    private String voucherCode;
 
     @Data
     @Builder

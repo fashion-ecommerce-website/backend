@@ -13,12 +13,23 @@ import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResp
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutRequest;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.payment.repository.PaymentRepository;
+import com.spring.fit.backend.payment.service.PaymentService;
+import com.spring.fit.backend.voucher.domain.dto.VoucherValidateRequest;
+import com.spring.fit.backend.voucher.domain.dto.VoucherValidateResponse;
+import com.spring.fit.backend.voucher.domain.entity.Voucher;
+import com.spring.fit.backend.voucher.domain.entity.VoucherUsage;
+import com.spring.fit.backend.voucher.repository.VoucherUsageRepository;
+import com.spring.fit.backend.voucher.service.VoucherService;
+import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
+import com.spring.fit.backend.common.enums.VoucherType;
+import com.spring.fit.backend.common.enums.VoucherUsageStatus;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
 
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,11 +37,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
-public class PaymentServiceImpl implements com.spring.fit.backend.payment.service.PaymentService {
+public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final StripeProperties stripeProperties;
+    private final VoucherUsageRepository voucherUsageRepository;
+    private final VoucherService voucherService;
+    private final OrderDetailPromotionService orderDetailPromotionService;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -39,9 +53,18 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
             throw new ErrorException(HttpStatus.BAD_REQUEST, "paymentId is required");
         }
 
-        paymentRepository.findUserIdByPaymentId(paymentId)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside PaymentServiceImpl.createCheckoutSessionFromContext, payment not found with id: " + paymentId));
 
+        if(payment.getOrder().getVoucher() != null) {
+            VoucherValidateResponse voucherResponse = voucherService.validateVoucher(VoucherValidateRequest.builder()
+                    .code(payment.getOrder().getVoucher().getCode())
+                    .subtotal(payment.getOrder().getSubtotalAmount().doubleValue())
+                    .build(), payment.getOrder().getUser().getId());
+            if(!voucherResponse.isValid()) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, voucherResponse.getMessage());
+            }
+        }
         // build line items from native query
         var rows = paymentRepository.findOrderAndItemsByPaymentId(paymentId);
         if (rows.isEmpty()) {
@@ -112,8 +135,6 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
 
             Session session = Session.create(paramsBuilder.build());
 
-            Payment payment = paymentRepository.findById(paymentId)
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Payment not found"));
             payment.setProvider("STRIPE");
             payment.setTransactionNo(session.getId());
             payment.setStatus(PaymentStatus.UNPAID);
@@ -133,6 +154,28 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
     public void handlePaymentSucceeded(Long orderId, String provider, String transactionNo) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
+        // 1: Apply voucher if voucher was applied to the order
+        if (order.getVoucher() != null) {
+            try {
+                voucherService.applyVoucher(VoucherValidateRequest.builder()
+                        .code(order.getVoucher().getCode())
+                        .subtotal(order.getSubtotalAmount().doubleValue())
+                        .build(), order.getUser().getId(), order.getId());
+            } catch (Exception e) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+        }
+
+        // 2: Create OrderDetailPromotion records for order details with promotionId
+        try {
+            orderDetailPromotionService.createPromotionsForOrder(order);
+            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Successfully created promotions for order: {}", orderId);
+        } catch (Exception e) {
+            log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create promotions for order: {}", orderId, e);
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Failed to create promotions: " + e.getMessage());
+        }
+
+        // 3: Set payment status to PAID
         order.setPaymentStatus(PaymentStatus.PAID);
         Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
                 .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
@@ -140,6 +183,12 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
         payment.setTransactionNo(transactionNo);
         payment.setStatus(PaymentStatus.PAID);
         paymentRepository.save(payment);
+        
+        // Create VoucherUsage if voucher was applied to the order
+        if (order.getVoucher() != null) {
+            createVoucherUsage(order);
+        }
+        
         orderRepository.save(order);
     }
 
@@ -230,6 +279,58 @@ public class PaymentServiceImpl implements com.spring.fit.backend.payment.servic
     private Session extractSession(Event event) {
         EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
         return (Session) deserializer.getObject().orElse(null);
+    }
+
+    private void createVoucherUsage(Order order) {
+        try {
+            Voucher voucher = order.getVoucher();
+            if (voucher == null) {
+                log.warn("No voucher found for order {}", order.getId());
+                return;
+            }
+
+            // Calculate discount amount
+            BigDecimal discountAmount = calculateVoucherDiscount(voucher, order.getSubtotalAmount());
+
+            // Create VoucherUsage
+            var voucherUsage = VoucherUsage.builder()
+                    .voucher(voucher)
+                    .user(order.getUser())
+                    .order(order)
+                    .discountAmount(discountAmount)
+                    .status(VoucherUsageStatus.APPLIED)
+                    .build();
+
+            voucherUsageRepository.save(voucherUsage);
+            log.info("VoucherUsage created for order {} with voucher code {}", order.getId(), voucher.getCode());
+        } catch (Exception e) {
+            log.error("Failed to create VoucherUsage for order {} with voucher", order.getId(), e);
+            // Don't throw exception to avoid breaking payment success flow
+        }
+    }
+
+    private BigDecimal calculateVoucherDiscount(Voucher voucher, BigDecimal subtotalAmount) {
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        
+        if (voucher.getType() == VoucherType.PERCENT) {
+            // Calculate percentage discount
+            discountAmount = subtotalAmount.multiply(voucher.getValue().divide(BigDecimal.valueOf(100)));
+            
+            // Apply max discount limit if set
+            if (voucher.getMaxDiscount() != null && discountAmount.compareTo(voucher.getMaxDiscount()) > 0) {
+                discountAmount = voucher.getMaxDiscount();
+            }
+        } else if (voucher.getType() == VoucherType.FIXED) {
+            // Fixed amount discount
+            discountAmount = voucher.getValue();
+        }
+        
+        // Ensure discount doesn't exceed subtotal
+        if (discountAmount.compareTo(subtotalAmount) > 0) {
+            discountAmount = subtotalAmount;
+        }
+        
+        return discountAmount;
     }
 }
 

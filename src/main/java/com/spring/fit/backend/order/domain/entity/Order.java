@@ -5,6 +5,7 @@ import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.user.domain.entity.AddressEntity;
+import com.spring.fit.backend.voucher.domain.entity.Voucher;
 import com.spring.fit.backend.voucher.domain.entity.VoucherUsage;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -75,6 +76,10 @@ public class Order {
 
     @Column(name = "note", columnDefinition = "text")
     private String note;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "voucher_id", foreignKey = @ForeignKey(name = "fk_order_voucher"))
+    private Voucher voucher;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shipping_address_id", nullable = false)
