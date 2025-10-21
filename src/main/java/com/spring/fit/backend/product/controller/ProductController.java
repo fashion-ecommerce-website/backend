@@ -29,9 +29,8 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    public ResponseEntity<PageResult<ProductCardView>> getProductsByCategory(
+    public ResponseEntity<PageResult<ProductCardWithPromotionResponse>> getProductsByCategory(
             @RequestParam
-            @NotBlank(message = "Category cannot be blank")
             @Size(max = 100, message = "Category cannot exceed 100 characters")
             String category,
 
@@ -65,7 +64,7 @@ public class ProductController {
                 category, title, colors, sizes, priceBucket, sortBy, page, pageSize);
         
         try {
-            PageResult<ProductCardView> result = productService.filterByCategory(
+            PageResult<ProductCardWithPromotionResponse> result = productService.filterByCategory(
                     category, title, colors, sizes, priceBucket, sortBy, page, pageSize);
 
             log.info("Inside ProductController.getProductsByCategory success totalItems={}", result.totalItems());
@@ -77,12 +76,49 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/discounted")
+    public ResponseEntity<PageResult<ProductCardWithPromotionResponse>> getDiscountedProducts(
+            @RequestParam(required = false)
+            @Size(max = 255, message = "Title cannot exceed 255 characters")
+            String title,
+
+            @RequestParam(required = false)
+            @Size(max = 20, message = "Cannot select more than 20 colors")
+            List<@NotBlank @Size(max = 50) String> colors,
+
+            @RequestParam(required = false)
+            @Size(max = 20, message = "Cannot select more than 20 sizes")
+            List<@NotBlank @Size(max = 10) String> sizes,
+
+            @RequestParam(required = false, name="price")
+            @Pattern(regexp = "^(<1m|1-2m|2-3m|>4m)$", message = "Invalid price bucket format")
+            String priceBucket,
+
+            @RequestParam(required = false, name="sort")
+            @Pattern(regexp = "^(price|productTitle|name)_(asc|desc)$", message = "Invalid sort format")
+            String sortBy,
+
+            @RequestParam(defaultValue = "0")
+            @Min(value = 0, message = "Page must be >= 0")
+            @Max(value = 100, message = "Page cannot exceed 100")
+            int page,
+
+            @RequestParam(defaultValue = "12") @Min(value = 1, message = "PageSize must be >= 1") @Max(value = 100, message = "PageSize cannot exceed 100") int pageSize) {
+        try {
+            PageResult<ProductCardWithPromotionResponse> result = productService.filterDiscounted(
+                    title, colors, sizes, priceBucket, sortBy, page, pageSize);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            throw e;
+        }
+    }
+
     @GetMapping("/details/{detailId}")
-    public ResponseEntity<ProductDetailResponse> getProductDetailById(
+    public ResponseEntity<ProductDetailWithPromotionResponse> getProductDetailById(
             @PathVariable Long detailId) {
         log.info("Inside ProductController.getProductDetailById detailId={}", detailId);
         try {
-            ProductDetailResponse response = productService.getProductDetailById(detailId);
+            ProductDetailWithPromotionResponse response = productService.getProductDetailByIdWithPromotion(detailId);
             log.info("Inside ProductController.getProductDetailById success detailId={}", detailId);
             return ResponseEntity.ok(response);
 
@@ -93,15 +129,15 @@ public class ProductController {
     }
 
     @GetMapping("/details/{detailId}/color")
-    public ResponseEntity<ProductDetailResponse> getProductDetailByColor(
+    public ResponseEntity<ProductDetailWithPromotionResponse> getProductDetailByColor(
             @PathVariable Long detailId,
             @RequestParam("activeColor") String activeColor,
             @RequestParam(value = "activeSize", required = false) String activeSize) {
         log.info("Inside ProductController.getProductDetailByColor baseDetailId={}, activeColor={}, activeSize={}", detailId, activeColor, activeSize);
         try {
-            ProductDetailResponse response = StringUtils.hasText(activeSize)
-                    ? productService.getProductDetailByColorAndSize(detailId, activeColor, activeSize)
-                    : productService.getProductDetailByColor(detailId, activeColor);
+            ProductDetailWithPromotionResponse response = StringUtils.hasText(activeSize)
+                    ? productService.getProductDetailByColorAndSizeWithPromotion(detailId, activeColor, activeSize)
+                    : productService.getProductDetailByColorWithPromotion(detailId, activeColor);
             log.info("Inside ProductController.getProductDetailByColor success baseDetailId={}, activeColor={}, activeSize={}", detailId, activeColor, activeSize);
             return ResponseEntity.ok(response);
         } catch (Exception e) {

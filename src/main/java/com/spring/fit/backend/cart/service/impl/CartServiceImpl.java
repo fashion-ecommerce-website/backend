@@ -2,6 +2,7 @@ package com.spring.fit.backend.cart.service.impl;
 
 import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
 import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.CartDetailWithPromotionResponse;
 import com.spring.fit.backend.cart.domain.dto.UpdateCartItemRequest;
 import com.spring.fit.backend.cart.domain.entity.CartDetail;
 import com.spring.fit.backend.cart.repository.CartDetailRepository;
@@ -9,6 +10,9 @@ import com.spring.fit.backend.cart.service.CartService;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductRepository;
+import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
+import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
+import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +38,7 @@ public class CartServiceImpl implements CartService {
     private final CartDetailRepository cartDetailRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final PromotionService promotionService;
 
     @Override
     public CartDetailResponse addToCart(String userEmail, AddToCartRequest request) {
@@ -107,6 +112,68 @@ public class CartServiceImpl implements CartService {
             
         } catch (Exception e) {
             log.error("Inside CartServiceImpl.getCartItems error userEmail={}, message={}", userEmail, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CartDetailWithPromotionResponse> getCartItemsWithPromotion(String userEmail) {
+        log.info("Inside CartServiceImpl.getCartItemsWithPromotion userEmail={}", userEmail);
+
+        try {
+            UserEntity user = findUserByEmail(userEmail);
+            List<CartDetail> cartDetails = cartDetailRepository.findByUserIdWithDetails(user.getId());
+
+            List<CartDetailWithPromotionResponse> response = cartDetails.stream()
+                    .map(cartDetail -> {
+                        // Tạo base response từ entity
+                        CartDetailWithPromotionResponse baseResponse = CartDetailWithPromotionResponse.fromEntity(cartDetail);
+                        
+                        // Áp dụng promotion
+                        var applyRes = PromotionApplyResponse.builder().build();
+                        try {
+                            var applyReq = PromotionApplyRequest.builder()
+                                    .skuId(cartDetail.getProductDetail().getId())
+                                    .basePrice(cartDetail.getProductDetail().getPrice())
+                                    .build();
+                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        } catch (Exception ex) {
+                            // fallback giữ nguyên giá nếu có lỗi
+                            applyRes = PromotionApplyResponse.builder()
+                                    .basePrice(cartDetail.getProductDetail().getPrice())
+                                    .finalPrice(cartDetail.getProductDetail().getPrice())
+                                    .percentOff(0)
+                                    .build();
+                        }
+                        
+                        // Cập nhật thông tin promotion
+                        return CartDetailWithPromotionResponse.builder()
+                                .id(baseResponse.getId())
+                                .productDetailId(baseResponse.getProductDetailId())
+                                .productTitle(baseResponse.getProductTitle())
+                                .productSlug(baseResponse.getProductSlug())
+                                .colorName(baseResponse.getColorName())
+                                .sizeName(baseResponse.getSizeName())
+                                .price(baseResponse.getPrice())
+                                .finalPrice(applyRes.getFinalPrice())
+                                .percentOff(applyRes.getPercentOff())
+                                .promotionId(applyRes.getPromotionId())
+                                .promotionName(applyRes.getPromotionName())
+                                .quantity(baseResponse.getQuantity())
+                                .availableQuantity(baseResponse.getAvailableQuantity())
+                                .imageUrl(baseResponse.getImageUrl())
+                                .createdAt(baseResponse.getCreatedAt())
+                                .updatedAt(baseResponse.getUpdatedAt())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            log.info("Inside CartServiceImpl.getCartItemsWithPromotion success userEmail={}, itemCount={}", userEmail, response.size());
+            return response;
+            
+        } catch (Exception e) {
+            log.error("Inside CartServiceImpl.getCartItemsWithPromotion error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }

@@ -16,21 +16,6 @@ import java.util.Optional;
 @Repository
 public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpecificationExecutor<Voucher> {
 
-    Optional<Voucher> findByCode(String code);
-
-    @Query("SELECT v FROM Voucher v WHERE v.code = :code AND v.isActive = true")
-    Optional<Voucher> findActiveByCode(@Param("code") String code);
-
-    @Query("SELECT v FROM Voucher v WHERE v.code = :code AND v.isActive = true " +
-           "AND v.startAt <= :now AND v.endAt >= :now")
-    Optional<Voucher> findValidByCode(@Param("code") String code, @Param("now") LocalDateTime now);
-
-    @Query("SELECT COUNT(vu) FROM VoucherUsage vu WHERE vu.voucher.id = :voucherId AND vu.user.id = :userId")
-    Long countUsageByUser(@Param("voucherId") Long voucherId, @Param("userId") Long userId);
-
-    @Query("SELECT COUNT(vu) FROM VoucherUsage vu WHERE vu.voucher.id = :voucherId")
-    Long countTotalUsage(@Param("voucherId") Long voucherId);
-
     @Query("SELECT v FROM Voucher v WHERE v.code = :code AND v.isActive = true " +
            "AND v.startAt <= :now AND v.endAt >= :now " +
            "AND (:subtotal IS NULL OR v.minOrderAmount IS NULL OR v.minOrderAmount <= :subtotal)")
@@ -39,8 +24,6 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
                                            @Param("subtotal") Double subtotal);
 
     boolean existsByCodeIgnoreCase(String code);
-
-    boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Voucher v WHERE v.code = :code AND v.isActive = true " +
