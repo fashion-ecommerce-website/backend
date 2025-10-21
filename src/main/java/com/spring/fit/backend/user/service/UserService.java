@@ -1,6 +1,7 @@
 package com.spring.fit.backend.user.service;
 
 import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
 import com.spring.fit.backend.user.domain.dto.request.UpdateUserStatusRequest;
 import com.spring.fit.backend.user.domain.dto.response.UserResponse;
@@ -21,6 +22,7 @@ public interface UserService {
     void addProductToRecentlyViewed(String email, long productId);
     
     List<ProductCardView> getRecentlyViewedProducts(String email);
+    List<ProductCardWithPromotionResponse> getRecentlyViewedProductsWithPromotion(String email);
     
     void removeSelectedProductsFromRecentlyViewed(String email, List<Long> productIds);
     

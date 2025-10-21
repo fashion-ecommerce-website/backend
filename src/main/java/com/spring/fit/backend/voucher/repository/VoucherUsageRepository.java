@@ -21,9 +21,6 @@ public interface VoucherUsageRepository extends JpaRepository<VoucherUsage, Long
     @Query("SELECT COUNT(vu) FROM VoucherUsage vu WHERE vu.voucher.id = :voucherId AND vu.status = :status")
     Long countTotalUsage(@Param("voucherId") Long voucherId, @Param("status") VoucherUsageStatus status);
 
-    List<VoucherUsage> findByUserId(Long userId);
-
-    List<VoucherUsage> findByVoucherId(Long voucherId);
 }
 
 

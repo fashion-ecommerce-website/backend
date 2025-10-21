@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
+import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.product.service.ProductService;
 import com.spring.fit.backend.user.service.RecentViewService;
 import org.springframework.http.HttpStatus;
@@ -189,6 +190,42 @@ public class UserServiceImpl implements UserService {
             
         } catch (Exception e) {
             log.error("Inside UserServiceImpl.getRecentlyViewedProducts error email={}, message={}", email, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Override
+    public List<ProductCardWithPromotionResponse> getRecentlyViewedProductsWithPromotion(String email) {
+        log.info("Inside UserServiceImpl.getRecentlyViewedProductsWithPromotion email={}", email);
+        
+        try {
+            UserResponse user = getCurrentUser(email);
+            
+            List<Long> recentProductIds = recentViewService.getRecentIds(user.getId());
+            
+            if (recentProductIds.isEmpty()) {
+                log.info("Inside UserServiceImpl.getRecentlyViewedProductsWithPromotion none email={}", email);
+                return List.of();
+            }
+            
+            List<ProductCardWithPromotionResponse> recentProducts = productService.getRecentlyViewedProductsWithPromotion(recentProductIds, user.getId());
+
+            // Danh sách đã sắp xếp theo thứ tự "viewed"
+            Map<Long, ProductCardWithPromotionResponse> byId =
+                recentProducts.stream()
+                            .collect(Collectors.toMap(ProductCardWithPromotionResponse::getDetailId, Function.identity()));
+
+            List<ProductCardWithPromotionResponse> ordered =
+                recentProductIds.stream()
+                                .map(byId::get)
+                                .filter(Objects::nonNull)
+                                .toList();
+
+            log.info("Inside UserServiceImpl.getRecentlyViewedProductsWithPromotion success email={}, count={}", email, ordered.size());
+            return ordered;
+            
+        } catch (Exception e) {
+            log.error("Inside UserServiceImpl.getRecentlyViewedProductsWithPromotion error email={}, message={}", email, e.getMessage(), e);
             throw e;
         }
     }
