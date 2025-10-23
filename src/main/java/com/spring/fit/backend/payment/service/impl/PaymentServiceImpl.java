@@ -24,9 +24,11 @@ import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
 import com.spring.fit.backend.common.enums.VoucherType;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Coupon;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.checkout.Session;
+import com.stripe.param.CouponCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 
 import java.math.BigDecimal;
@@ -48,14 +50,17 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
+        // 1. VALIDATION & DATA RETRIEVAL
         Long paymentId = request.getPaymentId();
         if (paymentId == null) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "paymentId is required");
         }
 
+        // Retrieve payment entity and validate it exists
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside PaymentServiceImpl.createCheckoutSessionFromContext, payment not found with id: " + paymentId));
 
+        // 2. VOUCHER VALIDATION
         if(payment.getOrder().getVoucher() != null) {
             VoucherValidateResponse voucherResponse = voucherService.validateVoucher(VoucherValidateRequest.builder()
                     .code(payment.getOrder().getVoucher().getCode())
@@ -65,27 +70,34 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, voucherResponse.getMessage());
             }
         }
-        // build line items from native query
+        
+        // 3. ORDER DATA EXTRACTION
         var rows = paymentRepository.findOrderAndItemsByPaymentId(paymentId);
         if (rows.isEmpty()) {
             throw new ErrorException(HttpStatus.NOT_FOUND, "Order items not found for payment");
         }
 
-        // Extract order-level data from first row
         Object[] first = rows.get(0);
         Long orderId = ((Number) first[0]).longValue();
-        // totalAmount available if needed
-        // java.math.BigDecimal totalAmount = (java.math.BigDecimal) first[1];
-        String currency = (String) first[2];
+        BigDecimal totalAmount = (BigDecimal) first[1];
+        BigDecimal discountAmount = (BigDecimal) first[3];
+        log.info("Discount amount: {}", discountAmount);
+        BigDecimal shippingFee = (BigDecimal) first[4];
+        String currency = (String) first[5];
 
+        // 4. URL CONFIGURATION
         String successUrl = request.getSuccessUrl();
         String cancelUrl = request.getCancelUrl();
+        
+        // Set success URL with fallback chain
         if (successUrl == null || successUrl.isBlank()) {
             successUrl = stripeProperties.getSuccessUrl();
         }
         if (successUrl == null || successUrl.isBlank()) {
             successUrl = "http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}";
         }
+        
+        // Set cancel URL with fallback chain
         if (cancelUrl == null || cancelUrl.isBlank()) {
             cancelUrl = stripeProperties.getCancelUrl();
         }
@@ -93,7 +105,9 @@ public class PaymentServiceImpl implements PaymentService {
             cancelUrl = "http://localhost:3000/payment/cancel";
         }
 
+        // 5. STRIPE SESSION CREATION
         try {
+            // Initialize Stripe session parameters
             SessionCreateParams.Builder paramsBuilder = SessionCreateParams.builder()
                     .addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
                     .setMode(SessionCreateParams.Mode.PAYMENT)
@@ -102,29 +116,34 @@ public class PaymentServiceImpl implements PaymentService {
                     .putMetadata("orderId", String.valueOf(orderId))
                     .putMetadata("paymentId", String.valueOf(paymentId));
 
+            // 6. PRODUCT LINE ITEMS CREATION
             for (Object[] row : rows) {
-                String title = (String) row[3];
-                String color = (String) row[4];
-                String size = (String) row[5];
-                Long quantity = ((Number) row[6]).longValue();
-                java.math.BigDecimal unitPrice = (java.math.BigDecimal) row[7];
+                String title = (String) row[6];
+                String color = (String) row[7];
+                String size = (String) row[8];
+                Long quantity = ((Number) row[9]).longValue();
+                java.math.BigDecimal unitPrice = (java.math.BigDecimal) row[10];
 
+                // Build product name with variants (color, size)
                 String name = title;
                 if (color != null) name += " - " + color;
                 if (size != null) name += " - " + size;
 
+                // Create product data for Stripe
                 SessionCreateParams.LineItem.PriceData.ProductData productData = SessionCreateParams.LineItem.PriceData.ProductData
                         .builder().setName(name).build();
 
-                // Stripe expects amount in the smallest currency unit (no decimals for VND)
+                // Convert price to smallest currency unit (no decimals for VND)
                 long unitAmount = unitPrice.movePointRight(0).longValue();
 
+                // Create price data for the line item
                 SessionCreateParams.LineItem.PriceData priceData = SessionCreateParams.LineItem.PriceData.builder()
                         .setCurrency(currency.toLowerCase())
                         .setUnitAmount(unitAmount)
                         .setProductData(productData)
                         .build();
 
+                // Create and add line item to session
                 SessionCreateParams.LineItem lineItem = SessionCreateParams.LineItem.builder()
                         .setQuantity(quantity)
                         .setPriceData(priceData)
@@ -133,17 +152,79 @@ public class PaymentServiceImpl implements PaymentService {
                 paramsBuilder.addLineItem(lineItem);
             }
 
+            // 7. SHIPPING FEE LINE ITEM
+            // Add shipping fee as a separate line item if it exists
+            if (shippingFee != null && shippingFee.compareTo(BigDecimal.ZERO) > 0) {
+                SessionCreateParams.LineItem.PriceData.ProductData shippingProductData = SessionCreateParams.LineItem.PriceData.ProductData
+                        .builder().setName("Shipping Fee").build();
+
+                long shippingAmount = shippingFee.movePointRight(0).longValue();
+
+                SessionCreateParams.LineItem.PriceData shippingPriceData = SessionCreateParams.LineItem.PriceData.builder()
+                        .setCurrency(currency.toLowerCase())
+                        .setUnitAmount(shippingAmount)
+                        .setProductData(shippingProductData)
+                        .build();
+
+                SessionCreateParams.LineItem shippingLineItem = SessionCreateParams.LineItem.builder()
+                        .setQuantity(1L)
+                        .setPriceData(shippingPriceData)
+                        .build();
+
+                paramsBuilder.addLineItem(shippingLineItem);
+            }
+
+            // 8. DISCOUNT HANDLING
+            if (discountAmount != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                try {
+                    // Create a coupon for the discount amount
+                    long discountAmountCents = discountAmount.movePointRight(0).longValue();
+                    
+                    CouponCreateParams couponParams = CouponCreateParams.builder()
+                            .setAmountOff(discountAmountCents)
+                            .setCurrency(currency.toLowerCase())
+                            .setDuration(CouponCreateParams.Duration.ONCE)
+                            .setName("Order Discount")
+                            .build();
+                    
+                    Coupon coupon = Coupon.create(couponParams);
+                    log.info("Created Stripe coupon: {} for discount: {}", coupon.getId(), discountAmount);
+                    
+                    // Apply discount to the session
+                    SessionCreateParams.Discount discount = SessionCreateParams.Discount.builder()
+                            .setCoupon(coupon.getId())
+                            .build();
+                    
+                    paramsBuilder.addDiscount(discount);
+                    
+                } catch (StripeException e) {
+                    log.error("Failed to create Stripe coupon for discount", e);
+                    // Fallback: just add to metadata
+                    paramsBuilder.putMetadata("discountAmount", discountAmount.toString());
+                }
+            }
+            
+            // 9. METADATA & SESSION FINALIZATION
+            if (shippingFee != null && shippingFee.compareTo(BigDecimal.ZERO) > 0) {
+                paramsBuilder.putMetadata("shippingFee", shippingFee.toString());
+            }
+            paramsBuilder.putMetadata("totalAmount", totalAmount.toString());
+
+            // Create the Stripe checkout session
             Session session = Session.create(paramsBuilder.build());
 
+            // 10. PAYMENT ENTITY UPDATE
             payment.setProvider("STRIPE");
             payment.setTransactionNo(session.getId());
             payment.setStatus(PaymentStatus.UNPAID);
             paymentRepository.save(payment);
 
+            // 11. RESPONSE CREATION
             return CheckoutSessionResponse.builder()
                     .sessionId(session.getId())
                     .checkoutUrl(session.getUrl())
                     .build();
+                    
         } catch (StripeException e) {
             log.error("Failed to create Stripe Checkout session", e);
             throw new ErrorException(HttpStatus.BAD_GATEWAY, "Stripe error: " + e.getMessage());
