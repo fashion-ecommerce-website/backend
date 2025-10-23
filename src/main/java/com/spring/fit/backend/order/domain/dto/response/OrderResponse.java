@@ -62,7 +62,11 @@ public class OrderResponse {
         private String colorLabel;
         private String sizeLabel;
         private Integer quantity;
-        private BigDecimal unitPrice;
+        private BigDecimal unitPrice;        // base price
+        private BigDecimal finalPrice;       // after promotion
+        private Integer percentOff;          // integer percent
+        private Long promotionId;            // nullable
+        private String promotionName;        // nullable
         private BigDecimal totalPrice;
     }
 

@@ -13,6 +13,9 @@ import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.order.service.OrderService;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
+import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
+import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
+import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.user.repository.AddressRepository;
 import com.spring.fit.backend.voucher.domain.entity.Voucher;
@@ -42,6 +45,7 @@ public class OrderServiceImpl implements OrderService {
     private final AddressRepository addressRepository;
     private final ProductDetailRepository productDetailRepository;
     private final VoucherRepository voucherRepository;
+    private final PromotionService promotionService;
 
     @Override
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
@@ -253,16 +257,52 @@ public class OrderServiceImpl implements OrderService {
 
     private List<OrderResponse.OrderDetailResponse> mapOrderDetailsToResponse(Set<OrderDetail> orderDetails) {
         return orderDetails.stream()
-                .map(detail -> OrderResponse.OrderDetailResponse.builder()
-                        .id(detail.getId())
-                        .productDetailId(detail.getProductDetail().getId())
-                        .title(detail.getTitle())
-                        .colorLabel(detail.getColorLabel())
-                        .sizeLabel(detail.getSizeLabel())
-                        .quantity(detail.getQuantity())
-                        .unitPrice(detail.getUnitPrice())
-                        .totalPrice(detail.getTotalPrice())
-                        .build())
+                .map(detail -> {
+                    // Tạo base response từ entity
+                    OrderResponse.OrderDetailResponse baseResponse = OrderResponse.OrderDetailResponse.builder()
+                            .id(detail.getId())
+                            .productDetailId(detail.getProductDetail().getId())
+                            .title(detail.getTitle())
+                            .colorLabel(detail.getColorLabel())
+                            .sizeLabel(detail.getSizeLabel())
+                            .quantity(detail.getQuantity())
+                            .unitPrice(detail.getUnitPrice())
+                            .totalPrice(detail.getTotalPrice())
+                            .build();
+                    
+                    // Áp dụng promotion
+                    var applyRes = PromotionApplyResponse.builder().build();
+                    try {
+                        var applyReq = PromotionApplyRequest.builder()
+                                .skuId(detail.getProductDetail().getId())
+                                .basePrice(detail.getUnitPrice())
+                                .build();
+                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                    } catch (Exception ex) {
+                        // fallback giữ nguyên giá nếu có lỗi
+                        applyRes = PromotionApplyResponse.builder()
+                                .basePrice(detail.getUnitPrice())
+                                .finalPrice(detail.getUnitPrice())
+                                .percentOff(0)
+                                .build();
+                    }
+                    
+                    // Cập nhật thông tin promotion
+                    return OrderResponse.OrderDetailResponse.builder()
+                            .id(baseResponse.getId())
+                            .productDetailId(baseResponse.getProductDetailId())
+                            .title(baseResponse.getTitle())
+                            .colorLabel(baseResponse.getColorLabel())
+                            .sizeLabel(baseResponse.getSizeLabel())
+                            .quantity(baseResponse.getQuantity())
+                            .unitPrice(baseResponse.getUnitPrice())
+                            .finalPrice(applyRes.getFinalPrice())
+                            .percentOff(applyRes.getPercentOff())
+                            .promotionId(applyRes.getPromotionId())
+                            .promotionName(applyRes.getPromotionName())
+                            .totalPrice(baseResponse.getTotalPrice())
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
