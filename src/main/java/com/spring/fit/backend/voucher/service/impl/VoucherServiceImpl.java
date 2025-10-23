@@ -270,6 +270,7 @@ public class VoucherServiceImpl implements VoucherService {
         log.info("Creating voucher with auto-generated code: {}", code);
 
         validateDates(request);
+        validateUsages(request);
         if (request.getType() == VoucherType.PERCENT && request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new IllegalArgumentException("The percentage value cannot exceed 100.");
         }
@@ -293,6 +294,7 @@ public class VoucherServiceImpl implements VoucherService {
                 .orElseThrow(() -> new RuntimeException("Voucher does not exist"));
 
         validateDates(request);
+        validateUsages(request);
         if (request.getType() == VoucherType.PERCENT && request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new IllegalArgumentException("The percentage value cannot exceed 100.");
         }
@@ -333,6 +335,11 @@ public class VoucherServiceImpl implements VoucherService {
         }
     }
 
+    private void validateUsages(AdminVoucherRequest request) {
+        if (request.getUsageLimitTotal() < request.getUsageLimitPerUser()) {
+            throw new IllegalArgumentException("Usage limit total must be greater or equal to Usage limit per user");
+        }
+    }
 
     private void applyRequestToEntityForCreate(AdminVoucherRequest request, Voucher voucher, String code) {
         voucher.setCode(code);
