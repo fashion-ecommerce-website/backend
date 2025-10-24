@@ -20,7 +20,10 @@ import com.spring.fit.backend.voucher.domain.entity.Voucher;
 import com.spring.fit.backend.voucher.domain.entity.VoucherUsage;
 import com.spring.fit.backend.voucher.repository.VoucherUsageRepository;
 import com.spring.fit.backend.voucher.service.VoucherService;
+import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
+import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
 import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
+import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.common.enums.VoucherType;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
 import com.stripe.exception.StripeException;
@@ -47,6 +50,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final VoucherUsageRepository voucherUsageRepository;
     private final VoucherService voucherService;
     private final OrderDetailPromotionService orderDetailPromotionService;
+    private final PromotionService promotionService;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -122,7 +126,8 @@ public class PaymentServiceImpl implements PaymentService {
                 String color = (String) row[7];
                 String size = (String) row[8];
                 Long quantity = ((Number) row[9]).longValue();
-                java.math.BigDecimal unitPrice = (java.math.BigDecimal) row[10];
+                BigDecimal unitPrice = (BigDecimal) row[10];
+                Long detailId = (Long) row[11];
 
                 // Build product name with variants (color, size)
                 String name = title;
@@ -134,12 +139,17 @@ public class PaymentServiceImpl implements PaymentService {
                         .builder().setName(name).build();
 
                 // Convert price to smallest currency unit (no decimals for VND)
-                long unitAmount = unitPrice.movePointRight(0).longValue();
 
+                var applyReq = PromotionApplyRequest.builder()
+                .skuId(detailId)
+                .basePrice(unitPrice)
+                .build();
+                PromotionApplyResponse applyRes = promotionService.applyBestPromotionForSku(applyReq);
+        
                 // Create price data for the line item
                 SessionCreateParams.LineItem.PriceData priceData = SessionCreateParams.LineItem.PriceData.builder()
                         .setCurrency(currency.toLowerCase())
-                        .setUnitAmount(unitAmount)
+                        .setUnitAmount(applyRes.getFinalPrice().movePointRight(0).longValue())
                         .setProductData(productData)
                         .build();
 
