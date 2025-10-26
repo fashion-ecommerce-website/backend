@@ -25,6 +25,9 @@ public class Size {
     @Column(nullable = false, columnDefinition = "text")
     private String label;
 
+    @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
+    private Boolean isActive = true;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
