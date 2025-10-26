@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CreateSizeRequest {
+public class SizeRequest {
 
     @NotBlank(message = "Size code cannot be blank")
     @Size(max = 50, message = "Size code cannot exceed 50 characters")

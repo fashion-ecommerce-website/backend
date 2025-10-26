@@ -1,6 +1,5 @@
 package com.spring.fit.backend.product.controller;
-import com.spring.fit.backend.product.domain.dto.request.CreateSizeRequest;
-import com.spring.fit.backend.product.domain.dto.request.UpdateSizeRequest;
+import com.spring.fit.backend.product.domain.dto.request.SizeRequest;
 import com.spring.fit.backend.product.domain.dto.response.SizeResponse;
 import com.spring.fit.backend.product.service.SizeService;
 import lombok.RequiredArgsConstructor;
@@ -17,12 +16,12 @@ public class SizeController {
     private final SizeService sizeService;
 
     @PostMapping
-    public ResponseEntity<SizeResponse> createSize(@RequestBody CreateSizeRequest request) {
+    public ResponseEntity<SizeResponse> createSize(@RequestBody SizeRequest request) {
         return ResponseEntity.ok(sizeService.createSize(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<SizeResponse> updateSize(@PathVariable Short id, @RequestBody UpdateSizeRequest request) {
+    public ResponseEntity<SizeResponse> updateSize(@PathVariable Short id, @RequestBody SizeRequest request) {
         return ResponseEntity.ok(sizeService.updateSize(id, request));
     }
 

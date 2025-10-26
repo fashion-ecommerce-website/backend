@@ -1,7 +1,6 @@
 package com.spring.fit.backend.product.service.impl;
 import com.spring.fit.backend.common.exception.ErrorException;
-import com.spring.fit.backend.product.domain.dto.request.CreateSizeRequest;
-import com.spring.fit.backend.product.domain.dto.request.UpdateSizeRequest;
+import com.spring.fit.backend.product.domain.dto.request.SizeRequest;
 import com.spring.fit.backend.product.domain.dto.response.SizeResponse;
 import com.spring.fit.backend.product.domain.entity.Size;
 import com.spring.fit.backend.product.repository.SizeRepository;
@@ -24,7 +23,7 @@ public class SizeServiceImpl implements SizeService {
 
     @Override
     @Transactional
-    public SizeResponse createSize(CreateSizeRequest request) {
+    public SizeResponse createSize(SizeRequest request) {
         if (sizeRepository.existsByCodeIgnoreCase(request.getCode())) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Size code already exists");
         }
@@ -40,7 +39,7 @@ public class SizeServiceImpl implements SizeService {
 
     @Override
     @Transactional
-    public SizeResponse updateSize(Short id, UpdateSizeRequest request) {
+    public SizeResponse updateSize(Short id, SizeRequest request) {
         Size size = sizeRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Size not found"));
 
