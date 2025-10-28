@@ -11,4 +11,5 @@ public class ColorResponse {
     private Short id;
     private String name;
     private String hex;
+    private Boolean isActive;
 } 

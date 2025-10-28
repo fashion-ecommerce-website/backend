@@ -11,4 +11,5 @@ public class SizeResponse {
     private Short id;
     private String code;
     private String label;
+    private Boolean isActive;
 }
