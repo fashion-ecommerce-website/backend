@@ -258,15 +258,19 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Order ID: {}", orderId);
         
         try {
-            Order order = orderRepository.findById(orderId)
+            Order order = orderRepository.findByIdWithVoucher(orderId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
             
             // 1: Apply voucher if voucher was applied to the order
+            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Order {} voucher check: {}", orderId, order.getVoucher());
             if (order.getVoucher() != null) {
+                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Applying voucher {} for order {}", order.getVoucher().getCode(), orderId);
                 voucherService.applyVoucher(VoucherValidateRequest.builder()
                         .code(order.getVoucher().getCode())
                         .subtotal(order.getSubtotalAmount().doubleValue())
                         .build(), order.getUser().getId(), order.getId());
+            } else {
+                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, No voucher found for order {}", orderId);
             }
 
             // 2: Create OrderDetailPromotion records for order details with promotionId
@@ -395,8 +399,15 @@ public class PaymentServiceImpl implements PaymentService {
     private void createVoucherUsage(Order order) {
         try {
             Voucher voucher = order.getVoucher();
+            log.info("Inside PaymentServiceImpl.createVoucherUsage, Order {} voucher: {}", order.getId(), voucher);
             if (voucher == null) {
-                log.warn("No voucher found for order {}", order.getId());
+                log.warn("Inside PaymentServiceImpl.createVoucherUsage, No voucher found for order {}", order.getId());
+                return;
+            }
+
+            // Idempotency guard: ensure only one VoucherUsage per order
+            if (voucherUsageRepository.findByOrderId(order.getId()).isPresent()) {
+                log.info("Inside PaymentServiceImpl.createVoucherUsage, VoucherUsage already exists for order {}, skipping creation", order.getId());
                 return;
             }
 

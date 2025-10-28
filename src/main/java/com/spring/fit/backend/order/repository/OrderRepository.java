@@ -73,6 +73,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         "WHERE o.id = :id")
         Optional<Order> findByIdWithAllRelations(@Param("id") Long id);
 
+        // Find orders with voucher
+        @Query("SELECT o FROM Order o LEFT JOIN FETCH o.voucher WHERE o.id = :id")
+        Optional<Order> findByIdWithVoucher(@Param("id") Long id);
+
+        // Find orders with all relationships including voucher
+        @Query("SELECT o FROM Order o " +
+                        "LEFT JOIN FETCH o.orderDetails " +
+                        "LEFT JOIN FETCH o.payments " +
+                        "LEFT JOIN FETCH o.shipments " +
+                        "LEFT JOIN FETCH o.voucher " +
+                        "WHERE o.id = :id")
+        Optional<Order> findByIdWithAllRelationsAndVoucher(@Param("id") Long id);
+
         // Find all orders with optional filters using JPQL for better type safety
         @Query("SELECT o FROM Order o WHERE " +
                "(:userId IS NULL OR o.user.id = :userId) AND " +

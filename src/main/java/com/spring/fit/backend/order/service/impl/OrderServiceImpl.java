@@ -68,12 +68,23 @@ public class OrderServiceImpl implements OrderService {
         // Handle voucher if provided - validate and set voucher relationship
         Voucher voucher = null;
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
-            voucher = voucherRepository.findValidVoucherByCode(
-                    request.getVoucherCode(), 
-                    LocalDateTime.now(), 
+            var now = LocalDateTime.now();
+            var maybeVoucher = voucherRepository.findValidVoucherByCode(
+                    request.getVoucherCode(),
+                    now,
                     request.getSubtotalAmount().doubleValue()
-            ).orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, 
-                    "Inside OrderServiceImpl.createOrder, invalid or expired voucher code: {}" + request.getVoucherCode()));
+            );
+
+            if (maybeVoucher.isEmpty()) {
+                log.warn("Inside OrderServiceImpl.createOrder, voucherCode {} not valid for subtotal {} at {}", 
+                        request.getVoucherCode(), request.getSubtotalAmount(), now);
+                throw new ErrorException(HttpStatus.BAD_REQUEST,
+                        "Invalid or expired voucher code: " + request.getVoucherCode());
+            }
+
+            voucher = maybeVoucher.get();
+            log.info("Inside OrderServiceImpl.createOrder, resolved voucher id={} code={}", 
+                    voucher.getId(), voucher.getCode());
         }
 
         // Create order
