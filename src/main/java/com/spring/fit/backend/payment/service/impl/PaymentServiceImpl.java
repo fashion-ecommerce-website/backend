@@ -20,24 +20,23 @@ import com.spring.fit.backend.voucher.domain.entity.Voucher;
 import com.spring.fit.backend.voucher.domain.entity.VoucherUsage;
 import com.spring.fit.backend.voucher.repository.VoucherUsageRepository;
 import com.spring.fit.backend.voucher.service.VoucherService;
+import com.spring.fit.backend.email.service.OrderEmailService;
+import com.spring.fit.backend.payment.helper.StripeHelper;
 import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
 import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
 import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
 import com.spring.fit.backend.promotion.service.PromotionService;
-import com.spring.fit.backend.common.enums.VoucherType;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
 import com.stripe.exception.StripeException;
-import com.stripe.model.Coupon;
 import com.stripe.model.Event;
-import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.checkout.Session;
-import com.stripe.param.CouponCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import static com.spring.fit.backend.common.constants.OrderConstants.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -51,6 +50,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final VoucherService voucherService;
     private final OrderDetailPromotionService orderDetailPromotionService;
     private final PromotionService promotionService;
+    private final OrderEmailService orderEmailService;
+    private final StripeHelper stripeHelper;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -85,9 +86,11 @@ public class PaymentServiceImpl implements PaymentService {
         Long orderId = ((Number) first[0]).longValue();
         BigDecimal totalAmount = (BigDecimal) first[1];
         BigDecimal discountAmount = (BigDecimal) first[3];
-        log.info("Discount amount: {}", discountAmount);
         BigDecimal shippingFee = (BigDecimal) first[4];
         String currency = (String) first[5];
+
+        log.info("Inside PaymentServiceImpl.createCheckoutSessionFromContext, Total amount: {}, Discount amount: {} , Shipping fee: {}", 
+        totalAmount, discountAmount, shippingFee);
 
         // 4. URL CONFIGURATION
         String successUrl = request.getSuccessUrl();
@@ -117,8 +120,8 @@ public class PaymentServiceImpl implements PaymentService {
                     .setMode(SessionCreateParams.Mode.PAYMENT)
                     .setSuccessUrl(successUrl)
                     .setCancelUrl(cancelUrl)
-                    .putMetadata("orderId", String.valueOf(orderId))
-                    .putMetadata("paymentId", String.valueOf(paymentId));
+                    .putMetadata(ORDER_ID_KEY, String.valueOf(orderId))
+                    .putMetadata(PAYMENT_ID_KEY, String.valueOf(paymentId));
 
             // 6. PRODUCT LINE ITEMS CREATION
             for (Object[] row : rows) {
@@ -187,28 +190,26 @@ public class PaymentServiceImpl implements PaymentService {
             // 8. DISCOUNT HANDLING
             if (discountAmount != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
                 try {
-                    // Create a coupon for the discount amount
-                    long discountAmountCents = discountAmount.movePointRight(0).longValue();
+                    // Create a coupon for the discount amount using StripeHelper
+                    long discountAmountCents = stripeHelper.convertToCents(discountAmount);
+                    String couponId = stripeHelper.createDiscountCoupon(discountAmountCents, currency);
                     
-                    CouponCreateParams couponParams = CouponCreateParams.builder()
-                            .setAmountOff(discountAmountCents)
-                            .setCurrency(currency.toLowerCase())
-                            .setDuration(CouponCreateParams.Duration.ONCE)
-                            .setName("Order Discount")
-                            .build();
+                    if (couponId != null) {
+                        // Apply discount to the session
+                        SessionCreateParams.Discount discount = SessionCreateParams.Discount.builder()
+                                .setCoupon(couponId)
+                                .build();
+                        
+                        paramsBuilder.addDiscount(discount);
+                        log.info("Applied discount coupon: {} for amount: {}", couponId, stripeHelper.formatCurrency(discountAmount));
+                    } else {
+                        // Fallback: just add to metadata
+                        paramsBuilder.putMetadata("discountAmount", discountAmount.toString());
+                        log.warn("Failed to create coupon, added discount to metadata: {}", discountAmount);
+                    }
                     
-                    Coupon coupon = Coupon.create(couponParams);
-                    log.info("Created Stripe coupon: {} for discount: {}", coupon.getId(), discountAmount);
-                    
-                    // Apply discount to the session
-                    SessionCreateParams.Discount discount = SessionCreateParams.Discount.builder()
-                            .setCoupon(coupon.getId())
-                            .build();
-                    
-                    paramsBuilder.addDiscount(discount);
-                    
-                } catch (StripeException e) {
-                    log.error("Failed to create Stripe coupon for discount", e);
+                } catch (Exception e) {
+                    log.error("Failed to create Stripe coupon for discount: {}", e.getMessage(), e);
                     // Fallback: just add to metadata
                     paramsBuilder.putMetadata("discountAmount", discountAmount.toString());
                 }
@@ -236,55 +237,66 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
                     
         } catch (StripeException e) {
-            log.error("Failed to create Stripe Checkout session", e);
+            log.error("Inside PaymentServiceImpl.createCheckoutSessionFromContext, Failed to create Stripe Checkout session: {}", e.getMessage(), e);
             throw new ErrorException(HttpStatus.BAD_GATEWAY, "Stripe error: " + e.getMessage());
         }
     }
 
     @Override
-    public void handlePaymentSucceeded(Long orderId, String provider, String transactionNo) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
-        // 1: Apply voucher if voucher was applied to the order
-        if (order.getVoucher() != null) {
-            try {
+    public void handleStripeEvent(Event event) {
+        
+        switch (event.getType()) {
+            case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
+            case "checkout.session.expired" -> handleCheckoutSessionExpired(event);
+            case "charge.refunded", "refund.created", "charge.refund.updated" -> handleRefunded(event);
+            default -> log.debug("Unhandled Stripe event type: {}", event.getType());
+        }
+        
+    }
+
+    private void handlePaymentSucceeded(Long orderId, String provider, String transactionNo) throws ErrorException {
+        log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Order ID: {}", orderId);
+        
+        try {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
+            
+            // 1: Apply voucher if voucher was applied to the order
+            if (order.getVoucher() != null) {
                 voucherService.applyVoucher(VoucherValidateRequest.builder()
                         .code(order.getVoucher().getCode())
                         .subtotal(order.getSubtotalAmount().doubleValue())
                         .build(), order.getUser().getId(), order.getId());
-            } catch (Exception e) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, e.getMessage());
             }
-        }
 
-        // 2: Create OrderDetailPromotion records for order details with promotionId
-        try {
+            // 2: Create OrderDetailPromotion records for order details with promotionId
             orderDetailPromotionService.createPromotionsForOrder(order);
-            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Successfully created promotions for order: {}", orderId);
-        } catch (Exception e) {
-            log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create promotions for order: {}", orderId, e);
-            throw new ErrorException(HttpStatus.BAD_REQUEST, "Failed to create promotions: " + e.getMessage());
-        }
 
-        // 3: Set payment status to PAID
-        order.setPaymentStatus(PaymentStatus.PAID);
-        Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
-                .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
-        payment.setProvider(provider);
-        payment.setTransactionNo(transactionNo);
-        payment.setStatus(PaymentStatus.PAID);
-        paymentRepository.save(payment);
-        
-        // Create VoucherUsage if voucher was applied to the order
-        if (order.getVoucher() != null) {
-            createVoucherUsage(order);
+            // 3: Set payment status to PAID
+            order.setPaymentStatus(PaymentStatus.PAID);
+            Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
+                    .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
+            payment.setProvider(provider);
+            payment.setTransactionNo(transactionNo);
+            payment.setStatus(PaymentStatus.PAID);
+            paymentRepository.save(payment);
+            
+            // Create VoucherUsage if voucher was applied to the order
+            if (order.getVoucher() != null) {
+                createVoucherUsage(order);
+            }
+            
+            orderRepository.save(order);
+            
+            // Send order confirmation email to user (non-blocking)
+            orderEmailService.sendOrderDetailsEmail(order);
+            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Successfully sent order confirmation email to user: {}", orderId);
+        } catch (Exception e) {
+            log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to process payment success for order {}: {}", orderId, e.getMessage(), e);
         }
-        
-        orderRepository.save(order);
     }
 
-    @Override
-    public void handlePaymentFailed(Long orderId, String provider, String transactionNo, String reason) {
+    private void handlePaymentFailed(Long orderId, String provider, String transactionNo, String reason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
         order.setPaymentStatus(PaymentStatus.UNPAID);
@@ -297,62 +309,74 @@ public class PaymentServiceImpl implements PaymentService {
         orderRepository.save(order);
     }
 
-    @Override
-    public void handleStripeEvent(Event event) {
-        switch (event.getType()) {
-            case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
-            case "checkout.session.expired" -> handleCheckoutSessionExpired(event);
-            case "charge.refunded", "refund.created", "charge.refund.updated" -> handleRefunded(event);
-            default -> log.debug("Unhandled Stripe event type: {}", event.getType());
-        }
-    }
-
     private void handleCheckoutSessionCompleted(Event event) {
-        Session session = extractSession(event);
-        if (session == null || session.getMetadata() == null) {
+        log.info("Processing checkout.session.completed event: {}", event.getId());
+        
+        Session session = stripeHelper.extractSession(event);
+        if (session == null) {
+            log.warn("Failed to extract session from event: {}", event.getId());
             return;
         }
-        String orderIdStr = session.getMetadata().get("orderId");
-        if (orderIdStr == null) {
+        
+        if (!stripeHelper.validateSessionMetadata(session)) {
             return;
         }
+        
+        Long orderId = stripeHelper.extractOrderIdFromSession(session);
+        if (orderId == null) {
+            return;
+        }
+        
         try {
-            Long orderId = Long.parseLong(orderIdStr);
             handlePaymentSucceeded(orderId, "STRIPE", session.getId());
-        } catch (NumberFormatException ex) {
-            log.warn("Invalid orderId in checkout.session.completed: {}", orderIdStr);
+            log.info("Inside PaymentServiceImpl.handleCheckoutSessionCompleted, Successfully processed checkout session completed for order: {}", orderId);
+        } catch (ErrorException ex) {
+            log.error("Inside PaymentServiceImpl.handleCheckoutSessionCompleted, Failed to process payment success for order {}: {}", orderId, ex.getMessage(), ex);
         }
     }
 
     private void handleCheckoutSessionExpired(Event event) {
-        Session session = extractSession(event);
-        if (session == null || session.getMetadata() == null) {
+        log.info("Inside PaymentServiceImpl.handleCheckoutSessionExpired, Processing checkout.session.expired event: {}", event.getId());
+        
+        Session session = stripeHelper.extractSession(event);
+        if (session == null) {
+            log.warn("Inside PaymentServiceImpl.handleCheckoutSessionExpired, Failed to extract session from expired event: {}", event.getId());
             return;
         }
-        String orderIdStr = session.getMetadata().get("orderId");
-        if (orderIdStr == null) {
+        
+        if (!stripeHelper.validateSessionMetadata(session)) {
             return;
         }
+        
+        Long orderId = stripeHelper.extractOrderIdFromSession(session);
+        if (orderId == null) {
+            return;
+        }
+        
         try {
-            Long orderId = Long.parseLong(orderIdStr);
             handlePaymentFailed(orderId, "STRIPE", session.getId(), "SESSION_EXPIRED");
-        } catch (NumberFormatException ex) {
-            log.warn("Invalid orderId in checkout.session.expired: {}", orderIdStr);
+            log.info("Inside PaymentServiceImpl.handleCheckoutSessionExpired, Processing payment failure for expired order: {}", orderId);
+        } catch (Exception ex) {
+            log.warn("Inside PaymentServiceImpl.handleCheckoutSessionExpired, Error processing expired session for order {}: {}", orderId, ex.getMessage());
         }
     }
 
     private void handleRefunded(Event event) {
-        Session session = extractSession(event);
-        if (session == null || session.getMetadata() == null) {
-            // For non-session events, we might not be able to extract Session; skip minimal impl
+        Session session = stripeHelper.extractSession(event);
+        if (session == null) {
             return;
         }
-        String orderIdStr = session.getMetadata().get("orderId");
-        if (orderIdStr == null) {
+        
+        if (!stripeHelper.validateSessionMetadata(session)) {
             return;
         }
+        
+        Long orderId = stripeHelper.extractOrderIdFromSession(session);
+        if (orderId == null) {
+            return;
+        }
+        
         try {
-            Long orderId = Long.parseLong(orderIdStr);
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
             order.setPaymentStatus(PaymentStatus.REFUNDED);
@@ -362,14 +386,10 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setStatus(PaymentStatus.REFUNDED);
             paymentRepository.save(payment);
             orderRepository.save(order);
-        } catch (NumberFormatException ex) {
-            log.warn("Invalid orderId in refund event: {}", orderIdStr);
+            log.info("Inside PaymentServiceImpl.handleRefunded, Successfully processed refund for order: {}", orderId);
+        } catch (Exception ex) {
+            log.warn("Inside PaymentServiceImpl.handleRefunded, Error processing refund for order {}: {}", orderId, ex.getMessage());
         }
-    }
-
-    private Session extractSession(Event event) {
-        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
-        return (Session) deserializer.getObject().orElse(null);
     }
 
     private void createVoucherUsage(Order order) {
@@ -381,7 +401,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
 
             // Calculate discount amount
-            BigDecimal discountAmount = calculateVoucherDiscount(voucher, order.getSubtotalAmount());
+            BigDecimal discountAmount = stripeHelper.calculateVoucherDiscount(voucher, order.getSubtotalAmount());
 
             // Create VoucherUsage
             var voucherUsage = VoucherUsage.builder()
@@ -393,36 +413,12 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
 
             voucherUsageRepository.save(voucherUsage);
-            log.info("VoucherUsage created for order {} with voucher code {}", order.getId(), voucher.getCode());
+            log.info("Inside PaymentServiceImpl.createVoucherUsage, VoucherUsage created for order {} with voucher code {}", order.getId(), voucher.getCode());
         } catch (Exception e) {
-            log.error("Failed to create VoucherUsage for order {} with voucher", order.getId(), e);
-            // Don't throw exception to avoid breaking payment success flow
+            log.error("Inside PaymentServiceImpl.createVoucherUsage, Failed to create VoucherUsage for order {} with voucher: {}", order.getId(), e.getMessage(), e);
         }
     }
 
-    private BigDecimal calculateVoucherDiscount(Voucher voucher, BigDecimal subtotalAmount) {
-        BigDecimal discountAmount = BigDecimal.ZERO;
-        
-        if (voucher.getType() == VoucherType.PERCENT) {
-            // Calculate percentage discount
-            discountAmount = subtotalAmount.multiply(voucher.getValue().divide(BigDecimal.valueOf(100)));
-            
-            // Apply max discount limit if set
-            if (voucher.getMaxDiscount() != null && discountAmount.compareTo(voucher.getMaxDiscount()) > 0) {
-                discountAmount = voucher.getMaxDiscount();
-            }
-        } else if (voucher.getType() == VoucherType.FIXED) {
-            // Fixed amount discount
-            discountAmount = voucher.getValue();
-        }
-        
-        // Ensure discount doesn't exceed subtotal
-        if (discountAmount.compareTo(subtotalAmount) > 0) {
-            discountAmount = subtotalAmount;
-        }
-        
-        return discountAmount;
-    }
 }
 
 

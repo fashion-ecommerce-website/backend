@@ -8,10 +8,6 @@ public interface PaymentService {
 
     CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request);
 
-    void handlePaymentSucceeded(Long orderId, String provider, String transactionNo);
-
-    void handlePaymentFailed(Long orderId, String provider, String transactionNo, String reason);
-
     void handleStripeEvent(Event event);
 }
 
