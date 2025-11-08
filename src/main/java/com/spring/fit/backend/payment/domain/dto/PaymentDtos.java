@@ -42,6 +42,30 @@ public class PaymentDtos {
         private String currency;
         private String status;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class RefundRequest {
+        @NotNull
+        private Long paymentId; 
+
+        private BigDecimal amount;
+
+        private String reason;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class RefundResponse {
+        private String refundId;
+        private String status;
+        private BigDecimal amount;
+        private String currency;
+    }
 }
 
 

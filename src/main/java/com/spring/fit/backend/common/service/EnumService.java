@@ -19,7 +19,8 @@ public class EnumService {
             getEnumValues(FulfillmentStatus.class),
             getEnumValues(VoucherUsageStatus.class),
             getEnumValues(AudienceType.class),
-            getEnumValues(VoucherType.class)
+            getEnumValues(VoucherType.class),
+            getEnumValues(PeriodType.class)
         );
     }
 
@@ -29,10 +30,8 @@ public class EnumService {
                     Enum::name,
                     enumValue -> {
                         try {
-                            // Sử dụng reflection để gọi method getValue() nếu có
                             return (String) enumClass.getMethod("getValue").invoke(enumValue);
                         } catch (Exception e) {
-                            // Nếu không có method getValue(), sử dụng name()
                             return enumValue.name();
                         }
                     }

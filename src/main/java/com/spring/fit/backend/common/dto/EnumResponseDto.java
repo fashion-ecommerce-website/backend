@@ -17,5 +17,6 @@ public class EnumResponseDto {
     private Map<String, String> voucherUsageStatus;
     private Map<String, String> audienceType;
     private Map<String, String> voucherType;
+    private Map<String, String> periodType;
 }
 

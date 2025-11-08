@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Repository
@@ -95,4 +97,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("status") FulfillmentStatus status,
                         @Param("paymentStatus") PaymentStatus paymentStatus,
                         Pageable pageable);
+
+        // Get orders by date range for dashboard
+        @Query(value = "SELECT o.* FROM orders o WHERE o.created_at >= :startDate AND o.created_at < :endDate", nativeQuery = true)
+        List<Order> findOrdersByDateRange(@Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
+
+        // Count orders by fulfillment status in date range
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate AND o.status = :status", nativeQuery = true)
+        Long countOrdersByDateAndStatus(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate, @Param("status") String status);
+
+        // Sum revenue by payment status in date range
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate AND o.payment_status = :paymentStatus", nativeQuery = true)
+        BigDecimal sumRevenueByDateAndPaymentStatus(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate, @Param("paymentStatus") String paymentStatus);
+
+        // Count total orders by date
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate", nativeQuery = true)
+        Long countOrdersByDate(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate);
+
+        // Sum total revenue by date
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate", nativeQuery = true)
+        BigDecimal sumTotalRevenueByDate(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate);
 }

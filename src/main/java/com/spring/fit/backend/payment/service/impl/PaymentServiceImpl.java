@@ -11,6 +11,8 @@ import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.payment.config.StripeProperties;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResponse;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutRequest;
+import com.spring.fit.backend.payment.domain.dto.PaymentDtos.RefundRequest;
+import com.spring.fit.backend.payment.domain.dto.PaymentDtos.RefundResponse;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.payment.repository.PaymentRepository;
 import com.spring.fit.backend.payment.service.PaymentService;
@@ -29,7 +31,9 @@ import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
+import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
+import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 
 import java.math.BigDecimal;
@@ -252,6 +256,71 @@ public class PaymentServiceImpl implements PaymentService {
             default -> log.debug("Unhandled Stripe event type: {}", event.getType());
         }
         
+    }
+
+    @Override 
+    public RefundResponse refundPayment(RefundRequest request) {
+
+        Payment payment = paymentRepository.findById(request.getPaymentId())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Payment not found with id: " + request.getPaymentId()));
+
+        if (payment.getTransactionNo() == null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Payment has no Stripe session/transaction to refund");
+        }
+
+        try {
+            // Retrieve Checkout Session to get the payment_intent id
+            Session session = Session.retrieve(payment.getTransactionNo());
+            String paymentIntentId = session.getPaymentIntent();
+            if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, "Stripe payment_intent not found for this session");
+            }
+
+            RefundCreateParams.Builder refundParams = RefundCreateParams.builder()
+                    .setPaymentIntent(paymentIntentId);
+
+            // Optional partial refund amount
+            if (request.getAmount() != null && request.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                long amountMinor = stripeHelper.convertToCents(request.getAmount());
+                refundParams.setAmount(amountMinor);
+            }
+
+            // Optional reason
+            if (request.getReason() != null && !request.getReason().isBlank()) {
+                try {
+                    refundParams.setReason(RefundCreateParams.Reason.valueOf(request.getReason().toUpperCase()));
+                } catch (IllegalArgumentException ignored) {
+                    log.error("Inside PaymentServiceImpl.refundPayment, Invalid reason: {}", request.getReason());
+                }
+            }
+
+            Refund refund = Refund.create(refundParams.build());
+
+            // Update status of payment and order
+            payment.setStatus(PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
+            Order order = payment.getOrder();
+            if (order != null) {
+                order.setPaymentStatus(PaymentStatus.REFUNDED);
+                orderRepository.save(order);
+            }
+
+            // Determine refunded amount and currency from Stripe refund response
+            BigDecimal refundedAmount = request.getAmount() != null
+                    ? request.getAmount()
+                    : (refund.getAmount() != null ? new BigDecimal(refund.getAmount()) : null);
+            String currency = refund.getCurrency();
+
+            return RefundResponse.builder()
+                    .refundId(refund.getId())
+                    .status(refund.getStatus())
+                    .amount(refundedAmount)
+                    .currency(currency)
+                    .build();
+        } catch (StripeException e) {
+            log.error("Inside PaymentServiceImpl.refundPayment, Failed to create Stripe refund for payment {}: {}", request.getPaymentId(), e.getMessage(), e);
+            throw new ErrorException(HttpStatus.BAD_GATEWAY, "Stripe refund error: " + e.getMessage());
+        }
     }
 
     private void handlePaymentSucceeded(Long orderId, String provider, String transactionNo) throws ErrorException {

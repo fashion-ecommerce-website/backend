@@ -14,6 +14,8 @@ import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.payment.config.StripeProperties;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutRequest;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResponse;
+import com.spring.fit.backend.payment.domain.dto.PaymentDtos.RefundRequest;
+import com.spring.fit.backend.payment.domain.dto.PaymentDtos.RefundResponse;
 import com.spring.fit.backend.payment.service.PaymentService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
@@ -64,6 +66,12 @@ public class PaymentController {
     }
 
     // Intentionally left without local handlers; all event handling is in the service
+
+    @PostMapping("/refund")
+    public ResponseEntity<RefundResponse> refund(@RequestBody RefundRequest request) {
+        RefundResponse response = paymentService.refundPayment(request);
+        return ResponseEntity.ok(response);
+    }
 
 }
 
