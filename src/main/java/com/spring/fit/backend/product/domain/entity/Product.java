@@ -61,4 +61,8 @@ public class Product {
     public int hashCode() {
         return Objects.hash(id);
     }
+    
+    public Set<ProductDetail> getDetails() {
+        return details;
+    }
 }

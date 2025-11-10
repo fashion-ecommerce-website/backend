@@ -62,6 +62,7 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
     @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids")
     boolean existsByCategoryIds(@Param("ids") List<Long> ids);
 
-
+    @Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.details WHERE p.isActive = true")
+    Page<Product> findAllWithDetails(Pageable pageable);
 
 }
