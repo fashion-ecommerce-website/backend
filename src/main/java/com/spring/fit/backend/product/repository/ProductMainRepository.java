@@ -1,5 +1,6 @@
 package com.spring.fit.backend.product.repository;
 
+import com.spring.fit.backend.category.domain.entity.Category;
 import com.spring.fit.backend.product.domain.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface ProductMainRepository extends org.springframework.data.jpa.repository.JpaRepository<Product, Long> {
@@ -62,6 +64,10 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
     @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids")
     boolean existsByCategoryIds(@Param("ids") List<Long> ids);
 
-
+    boolean existsByTitleIgnoreCaseAndDescriptionIgnoreCaseAndCategoriesIn(
+            String title,
+            String description,
+            Set<Category> categories
+    );
 
 }

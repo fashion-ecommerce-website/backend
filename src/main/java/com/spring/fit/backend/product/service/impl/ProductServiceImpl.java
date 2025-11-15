@@ -1225,7 +1225,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private String generateSlug(String productTitle, String colorName, String sizeCode) {
+     String generateSlug(String productTitle, String colorName, String sizeCode) {
         String base = productTitle + "-" + colorName + "-" + sizeCode;
         String slug = toSlug(base);
 
