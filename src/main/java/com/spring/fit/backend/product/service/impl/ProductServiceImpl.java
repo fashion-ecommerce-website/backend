@@ -127,6 +127,7 @@ public class ProductServiceImpl implements ProductService {
                                 .build();
                     }
                     return ProductCardWithPromotionResponse.builder()
+                            .productId(card.getProductId())
                             .detailId(card.getDetailId())
                             .productTitle(card.getProductTitle())
                             .productSlug(card.getProductSlug())
@@ -210,6 +211,7 @@ public class ProductServiceImpl implements ProductService {
                                 .build();
                     }
                     return ProductCardWithPromotionResponse.builder()
+                            .productId(card.getProductId())
                             .detailId(card.getDetailId())
                             .productTitle(card.getProductTitle())
                             .productSlug(card.getProductSlug())
@@ -333,7 +335,10 @@ public class ProductServiceImpl implements ProductService {
                     .filter(id -> !existingDetailIds.contains(id))
                     .toList();
 
-            recentViewService.removeSelected(userId, duplicateProductColors);
+            // Chỉ cleanup recent views nếu userId không null
+            if (userId != null && !duplicateProductColors.isEmpty()) {
+                recentViewService.removeSelected(userId, duplicateProductColors);
+            }
 
             log.debug("Found {} recently viewed products", products.size());
             
@@ -370,7 +375,10 @@ public class ProductServiceImpl implements ProductService {
                     .filter(id -> !existingDetailIds.contains(id))
                     .toList();
 
-            recentViewService.removeSelected(userId, duplicateProductColors);
+            // Chỉ cleanup recent views nếu userId không null
+            if (userId != null && !duplicateProductColors.isEmpty()) {
+                recentViewService.removeSelected(userId, duplicateProductColors);
+            }
 
             // Áp dụng promotion cho từng sản phẩm
             List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
@@ -391,6 +399,7 @@ public class ProductServiceImpl implements ProductService {
                                     .build();
                         }
                         return ProductCardWithPromotionResponse.builder()
+                                .productId(card.getProductId())
                                 .detailId(card.getDetailId())
                                 .productTitle(card.getProductTitle())
                                 .productSlug(card.getProductSlug())
@@ -414,6 +423,64 @@ public class ProductServiceImpl implements ProductService {
         } catch (Exception e) {
             log.error("Error getting recently viewed products with promotion: {}", e.getMessage(), e);
             throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây với promotion", e);
+        }
+    }
+
+    @Override
+    public List<ProductCardWithPromotionResponse> getProductsWithPromotionByProductIds(List<Long> productIds, Long userId) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        
+        log.debug("Getting products with promotion for productIds: {}", productIds);
+        
+        try {
+            // Lấy danh sách sản phẩm từ productIds (mỗi product lấy một detailId bất kỳ)
+            List<ProductCardView> products = productRepository.findProductsByProductIds(productIds);
+
+            // Áp dụng promotion cho từng sản phẩm
+            List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
+                    .map(card -> {
+                        var applyRes = PromotionApplyResponse.builder().build();
+                        try {
+                            var applyReq = PromotionApplyRequest.builder()
+                                    .skuId(card.getDetailId())
+                                    .basePrice(card.getPrice())
+                                    .build();
+                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        } catch (Exception ex) {
+                            // fallback giữ nguyên giá nếu có lỗi
+                            applyRes = PromotionApplyResponse.builder()
+                                    .basePrice(card.getPrice())
+                                    .finalPrice(card.getPrice())
+                                    .percentOff(0)
+                                    .build();
+                        }
+                        return ProductCardWithPromotionResponse.builder()
+                                .productId(card.getProductId())
+                                .detailId(card.getDetailId())
+                                .productTitle(card.getProductTitle())
+                                .productSlug(card.getProductSlug())
+                                .colorName(card.getColorName())
+                                .price(card.getPrice())
+                                .finalPrice(applyRes.getFinalPrice())
+                                .percentOff(applyRes.getPercentOff())
+                                .promotionId(applyRes.getPromotionId())
+                                .promotionName(applyRes.getPromotionName())
+                                .quantity(card.getQuantity())
+                                .colors(card.getColors())
+                                .imageUrls(card.getImageUrls())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            log.debug("Found {} products with promotion for productIds", enrichedProducts.size());
+            
+            return enrichedProducts;
+            
+        } catch (Exception e) {
+            log.error("Error getting products with promotion by productIds: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm với promotion từ productIds", e);
         }
     }
 

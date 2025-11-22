@@ -30,6 +30,9 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
     
     @Query("SELECT COUNT(pd) FROM ProductDetail pd WHERE pd.product.id = :productId AND pd.isActive = true")
     long countActiveDetailsByProductId(@Param("productId") Long productId);
+    
+    @Query("SELECT pd.product.id FROM ProductDetail pd WHERE pd.id = :detailId")
+    Optional<Long> findProductIdByDetailId(@Param("detailId") Long detailId);
 }
 
 
