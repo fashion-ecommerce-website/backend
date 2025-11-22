@@ -348,4 +348,178 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
           AND p.is_active = TRUE
         """, nativeQuery = true)
     Optional<ProductDetail> findActiveDetailById(@Param("id") Long id);
+
+    @Query(
+            value = """
+        WITH filtered AS (
+          SELECT d.id, d.product_id, d.color_id, d.size_id, d.price, d.quantity,
+                 d.slug AS product_slug,
+                 p.title AS product_title,
+                 c.name  AS color_name
+          FROM product_details d
+          JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
+          JOIN colors   c ON c.id = d.color_id
+          JOIN sizes    s ON s.id = d.size_id
+          JOIN product_categories pc ON pc.product_id = p.id
+          JOIN categories cat ON cat.id = pc.category_id AND cat.is_active = TRUE
+          WHERE d.is_active = TRUE
+            AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
+            AND (:colorsEmpty = TRUE OR c.name IN (:colors))
+            AND (:sizesEmpty  = TRUE OR s.code IN (:sizes))
+            AND (:minPrice IS NULL OR d.price >= :minPrice)
+            AND (:maxPrice IS NULL OR d.price <= :maxPrice)
+        )
+        , one_per_color AS (
+          SELECT DISTINCT ON (product_id, color_id)
+                 id            AS detail_id,
+                 product_title,
+                 product_slug,
+                 color_name,
+                 price,
+                 quantity,
+                 product_id,
+                 color_id
+          FROM filtered
+          ORDER BY product_id, color_id, price
+        )
+        , promotions_with_discount AS (
+          SELECT 
+            opc.detail_id,
+            opc.product_id,
+            opc.price AS base_price,
+            MAX(
+              CASE 
+                WHEN promo.type = 'PERCENT' THEN opc.price * promo.value / 100
+                ELSE promo.value
+              END
+            ) AS best_discount
+          FROM one_per_color opc
+          JOIN promotions promo ON promo.is_active = TRUE 
+            AND promo.start_at <= :currentTime 
+            AND promo.end_at >= :currentTime
+          JOIN promotion_targets pt ON pt.promotion_id = promo.id
+          WHERE (
+            (pt.target_type = 'SKU' AND pt.target_id = opc.detail_id)
+            OR (pt.target_type = 'PRODUCT' AND pt.target_id = opc.product_id)
+            OR (pt.target_type = 'CATEGORY' AND pt.target_id IN (
+              SELECT category_id FROM product_categories WHERE product_id = opc.product_id
+            ))
+          )
+          GROUP BY opc.detail_id, opc.product_id, opc.price
+        )
+        , products_with_promotion AS (
+          SELECT
+            opc.product_id                 AS productId,
+            opc.detail_id                  AS detailId,
+            opc.product_title              AS productTitle,
+            opc.product_slug               AS productSlug,
+            opc.color_name                 AS colorName,
+            opc.price                      AS price,
+            opc.quantity                   AS quantity,
+            COALESCE(pwd.best_discount, 0) AS discount,
+            GREATEST(opc.price - COALESCE(pwd.best_discount, 0), 0) AS final_price
+          FROM one_per_color opc
+          LEFT JOIN promotions_with_discount pwd ON pwd.detail_id = opc.detail_id
+          WHERE pwd.detail_id IS NOT NULL
+            AND GREATEST(opc.price - COALESCE(pwd.best_discount, 0), 0) < opc.price
+        )
+        SELECT
+          pwp.productId,
+          pwp.detailId,
+          pwp.productTitle,
+          pwp.productSlug,
+          pwp.colorName,
+          pwp.price,
+          pwp.quantity,
+          (SELECT ARRAY(
+               SELECT DISTINCT c2.name
+               FROM product_details d2
+               JOIN colors c2 ON c2.id = d2.color_id
+               WHERE d2.product_id = pwp.productId AND d2.is_active = TRUE
+               ORDER BY c2.name
+           ))                              AS colors,
+          (SELECT ARRAY(
+               SELECT i.url
+               FROM product_images pi
+               JOIN images i ON i.id = pi.image_id
+               WHERE pi.detail_id = pwp.detailId
+               ORDER BY pi.created_at
+               LIMIT 2
+           ))                              AS imageUrls
+        FROM products_with_promotion pwp
+        ORDER BY
+          CASE WHEN :sortBy = 'productTitle' AND :sortDir = 'asc'  THEN pwp.productTitle END ASC,
+          CASE WHEN :sortBy = 'productTitle' AND :sortDir = 'desc' THEN pwp.productTitle END DESC,
+          CASE WHEN :sortBy = 'price'        AND :sortDir = 'asc'  THEN pwp.price END ASC,
+          CASE WHEN :sortBy = 'price'        AND :sortDir = 'desc' THEN pwp.price END DESC,
+          pwp.productTitle ASC, pwp.detailId ASC
+        """,
+            countQuery = """
+        WITH filtered AS (
+          SELECT d.id, d.product_id, d.color_id, d.price
+          FROM product_details d
+          JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
+          JOIN colors   c ON c.id = d.color_id
+          JOIN sizes    s ON s.id = d.size_id
+          JOIN product_categories pc ON pc.product_id = p.id
+          JOIN categories cat ON cat.id = pc.category_id AND cat.is_active = TRUE
+          WHERE d.is_active = TRUE
+            AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
+            AND (:colorsEmpty = TRUE OR c.name IN (:colors))
+            AND (:sizesEmpty  = TRUE OR s.code IN (:sizes))
+            AND (:minPrice IS NULL OR d.price >= :minPrice)
+            AND (:maxPrice IS NULL OR d.price <= :maxPrice)
+        )
+        , one_per_color AS (
+          SELECT DISTINCT ON (product_id, color_id)
+                 id            AS detail_id,
+                 product_id,
+                 price
+          FROM filtered
+          ORDER BY product_id, color_id, price
+        )
+        , promotions_with_discount AS (
+          SELECT 
+            opc.detail_id,
+            opc.product_id,
+            MAX(
+              CASE 
+                WHEN promo.type = 'PERCENT' THEN opc.price * promo.value / 100
+                ELSE promo.value
+              END
+            ) AS best_discount
+          FROM one_per_color opc
+          JOIN promotions promo ON promo.is_active = TRUE 
+            AND promo.start_at <= :currentTime 
+            AND promo.end_at >= :currentTime
+          JOIN promotion_targets pt ON pt.promotion_id = promo.id
+          WHERE (
+            (pt.target_type = 'SKU' AND pt.target_id = opc.detail_id)
+            OR (pt.target_type = 'PRODUCT' AND pt.target_id = opc.product_id)
+            OR (pt.target_type = 'CATEGORY' AND pt.target_id IN (
+              SELECT category_id FROM product_categories WHERE product_id = opc.product_id
+            ))
+          )
+          GROUP BY opc.detail_id, opc.product_id, opc.price
+        )
+        SELECT COUNT(*) 
+        FROM one_per_color opc
+        JOIN promotions_with_discount pwd ON pwd.detail_id = opc.detail_id
+        WHERE GREATEST(opc.price - COALESCE(pwd.best_discount, 0), 0) < opc.price
+        """,
+            nativeQuery = true
+    )
+    Page<ProductCardView> filterDiscountedProducts(
+            @Param("title") String title,
+            @Param("colors") List<String> colors,
+            @Param("sizes") List<String>  sizes,
+            @Param("minPrice") BigDecimal minPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
+            @Param("colorsEmpty") boolean colorsEmpty,
+            @Param("sizesEmpty")  boolean sizesEmpty,
+            @Param("sortBy") String sortBy,
+            @Param("sortDir") String sortDir,
+            @Param("currentTime") java.time.LocalDateTime currentTime,
+            Pageable pageable
+    );
 }
