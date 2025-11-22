@@ -153,6 +153,9 @@ INSERT INTO colors ("name", hex ) VALUES ('orange', '#c69338');
 INSERT INTO colors ("name", hex ) VALUES ('mint', '#60a1a7');
 INSERT INTO colors ("name", hex ) VALUES ('brown', '#624e4f');
 INSERT INTO colors ("name", hex ) VALUES ('yellow', '#dac7a7');
+INSERT INTO colors ("name", hex ) VALUES ('blue', '#8ba6c1');
+INSERT INTO colors ("name", hex ) VALUES ('gray', '#c6c6c4');
+INSERT INTO colors ("name", hex ) VALUES ('green', '#76715d');
 
 ---- insert data to table size
 INSERT INTO sizes (code, "label") VALUES ('S', 'S');
