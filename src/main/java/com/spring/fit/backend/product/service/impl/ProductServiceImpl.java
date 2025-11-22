@@ -576,6 +576,12 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public ProductDetailWithPromotionResponse getProductDetailByIdWithPromotion(Long detailId) {
         ProductDetailResponse base = getProductDetailById(detailId);
+        
+        // Lấy productId từ ProductDetail
+        ProductDetail productDetail = productDetailRepository.findById(detailId)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
+        Long productId = productDetail.getProduct().getId();
+        
         var applyRes = PromotionApplyResponse.builder().build();
         try {
             var applyReq = PromotionApplyRequest.builder()
@@ -593,6 +599,7 @@ public class ProductServiceImpl implements ProductService {
 
         return ProductDetailWithPromotionResponse.builder()
                 .detailId(base.getDetailId())
+                .productId(productId)
                 .title(base.getTitle())
                 .price(base.getPrice())
                 .finalPrice(applyRes.getFinalPrice())

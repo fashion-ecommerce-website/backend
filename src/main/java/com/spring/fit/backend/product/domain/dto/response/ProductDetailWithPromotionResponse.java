@@ -18,6 +18,9 @@ public class ProductDetailWithPromotionResponse {
     @JsonProperty("detailId")
     private Long detailId;
 
+    @JsonProperty("productId")
+    private Long productId;
+
     private String title;
     private BigDecimal price;          // base price
     private BigDecimal finalPrice;     // after promotion
