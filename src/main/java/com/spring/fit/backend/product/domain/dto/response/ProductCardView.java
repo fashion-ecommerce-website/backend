@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public interface ProductCardView {
+    Long getProductId();
     Long getDetailId();
     String getProductTitle();
     String getProductSlug();

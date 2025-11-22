@@ -15,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductCardWithPromotionResponse {
+    private Long productId;
     private Long detailId;
     private String productTitle;
     private String productSlug;

@@ -39,6 +39,8 @@ public interface ProductService {
 
     List<ProductCardView> getRecentlyViewedProducts(List<Long> productIds, Long userId);
     List<ProductCardWithPromotionResponse> getRecentlyViewedProductsWithPromotion(List<Long> productIds, Long userId);
+    
+    List<ProductCardWithPromotionResponse> getProductsWithPromotionByProductIds(List<Long> productIds, Long userId);
 
 //    // ============ CRUD Operations ============
 
