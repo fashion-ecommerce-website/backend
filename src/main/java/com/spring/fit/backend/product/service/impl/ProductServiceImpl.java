@@ -170,86 +170,93 @@ public class ProductServiceImpl implements ProductService {
             int page,
             int pageSize) {
 
-        // Truy vấn đến (page+1)*pageSize để có đủ dữ liệu sau khi lọc theo khuyến mãi
+        log.debug("Filtering discounted products: title={}, colors={}, sizes={}, priceBucket={}, sortBy={}, page={}, pageSize={}",
+                title, colorNames, sizeCodes, priceBucket, sortBy, page, pageSize);
+
+        // 1) Map price bucket
         BigDecimal[] priceRange = mapPriceBucket(priceBucket);
         BigDecimal min = priceRange[0];
         BigDecimal max = priceRange[1];
+
+        // 2) Parse sort parameters
         SortParams sortParams = parseSortParameters(sortBy);
+
+        // 3) Create pagination
+        Pageable pageable = PageRequest.of(page, pageSize);
+
+        // 4) Normalize và sanitize filters
         FilterParams filterParams = normalizeFilters(title, colorNames, sizeCodes);
 
-        int fetchSize = Math.max(pageSize, (page + 1) * pageSize);
-        Pageable fetchPageable = PageRequest.of(0, fetchSize);
+        // 5) Query database với filter promotion ở repository level
+        try {
+            Page<ProductCardView> pageResult = productRepository.filterDiscountedProducts(
+                    filterParams.title(),
+                    filterParams.colors(),
+                    filterParams.sizes(),
+                    min,
+                    max,
+                    filterParams.colorsEmpty(),
+                    filterParams.sizesEmpty(),
+                    sortParams.field(),
+                    sortParams.direction(),
+                    LocalDateTime.now(),
+                    pageable
+            );
 
-        Page<ProductCardView> fetched = productRepository.filterProducts(
-                null,
-                filterParams.title(),
-                filterParams.colors(),
-                filterParams.sizes(),
-                min,
-                max,
-                filterParams.colorsEmpty(),
-                filterParams.sizesEmpty(),
-                sortParams.field(),
-                sortParams.direction(),
-                fetchPageable
-        );
+            log.debug("Query completed: found {} total discounted items, returned {} items",
+                    pageResult.getTotalElements(), pageResult.getContent().size());
 
-        List<ProductCardWithPromotionResponse> enriched = fetched.getContent().stream()
-                .map(card -> {
-                    var applyRes = PromotionApplyResponse.builder().build();
-                    try {
-                        var applyReq = PromotionApplyRequest.builder()
-                                .skuId(card.getDetailId())
-                                .basePrice(card.getPrice())
+            // Map thêm thông tin promotion chi tiết cho từng SKU
+            List<ProductCardWithPromotionResponse> items = pageResult.getContent().stream()
+                    .map(card -> {
+                        var applyRes = PromotionApplyResponse.builder().build();
+                        try {
+                            var applyReq = PromotionApplyRequest.builder()
+                                    .skuId(card.getDetailId())
+                                    .basePrice(card.getPrice())
+                                    .build();
+                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        } catch (Exception ex) {
+                            // fallback giữ nguyên giá nếu có lỗi
+                            log.warn("Error applying promotion for detailId {}: {}", card.getDetailId(), ex.getMessage());
+                            applyRes = PromotionApplyResponse.builder()
+                                    .basePrice(card.getPrice())
+                                    .finalPrice(card.getPrice())
+                                    .percentOff(0)
+                                    .build();
+                        }
+                        return ProductCardWithPromotionResponse.builder()
+                                .productId(card.getProductId())
+                                .detailId(card.getDetailId())
+                                .productTitle(card.getProductTitle())
+                                .productSlug(card.getProductSlug())
+                                .colorName(card.getColorName())
+                                .price(card.getPrice())
+                                .finalPrice(applyRes.getFinalPrice())
+                                .percentOff(applyRes.getPercentOff())
+                                .promotionId(applyRes.getPromotionId())
+                                .promotionName(applyRes.getPromotionName())
+                                .quantity(card.getQuantity())
+                                .colors(card.getColors())
+                                .imageUrls(card.getImageUrls())
                                 .build();
-                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
-                    } catch (Exception ex) {
-                        applyRes = PromotionApplyResponse.builder()
-                                .basePrice(card.getPrice())
-                                .finalPrice(card.getPrice())
-                                .percentOff(0)
-                                .build();
-                    }
-                    return ProductCardWithPromotionResponse.builder()
-                            .productId(card.getProductId())
-                            .detailId(card.getDetailId())
-                            .productTitle(card.getProductTitle())
-                            .productSlug(card.getProductSlug())
-                            .colorName(card.getColorName())
-                            .price(card.getPrice())
-                            .finalPrice(applyRes.getFinalPrice())
-                            .percentOff(applyRes.getPercentOff())
-                            .promotionId(applyRes.getPromotionId())
-                            .promotionName(applyRes.getPromotionName())
-                            .quantity(card.getQuantity())
-                            .colors(card.getColors())
-                            .imageUrls(card.getImageUrls())
-                            .build();
-                })
-                .filter(item -> item.getPromotionId() != null
-                        && item.getFinalPrice() != null
-                        && item.getPrice() != null
-                        && item.getFinalPrice().compareTo(item.getPrice()) < 0)
-                .toList();
+                    })
+                    .toList();
 
-        long totalItems = enriched.size();
-        int totalPages = (int) Math.ceil(totalItems / (double) pageSize);
-        int fromIndex = Math.min(page * pageSize, enriched.size());
-        int toIndex = Math.min(fromIndex + pageSize, enriched.size());
-        List<ProductCardWithPromotionResponse> pageItems = enriched.subList(fromIndex, toIndex);
+            return new PageResult<>(
+                    items,
+                    pageResult.getNumber(),
+                    pageResult.getSize(),
+                    pageResult.getTotalElements(),
+                    pageResult.getTotalPages(),
+                    pageResult.hasNext(),
+                    pageResult.hasPrevious()
+            );
 
-        boolean hasPrevious = page > 0;
-        boolean hasNext = page + 1 < totalPages;
-
-        return new PageResult<>(
-                pageItems,
-                page,
-                pageSize,
-                totalItems,
-                totalPages,
-                hasNext,
-                hasPrevious
-        );
+        } catch (Exception e) {
+            log.error("Database query failed for filterDiscounted: {}", e.getMessage(), e);
+            throw new RuntimeException("Error when querying promotional product data", e);
+        }
     }
     
     
