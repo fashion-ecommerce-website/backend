@@ -3,7 +3,6 @@ package com.spring.fit.backend.category.repository;
 import com.spring.fit.backend.category.domain.entity.Category;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -32,7 +31,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Page<Category> findAllByNameContainingIgnoreCaseAndIsActive(String name, Boolean isActive, Pageable pageable);
 
-    // 🔹 Lấy toàn bộ cây category (bao gồm cha + con)
+    // 🔹 Fetch all categories tree
     @Query(value = """
             WITH RECURSIVE category_tree AS (
                 SELECT id, parent_id, name, slug, is_active, created_at FROM categories WHERE id = :id
@@ -46,9 +45,18 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     List<Category> findCategoryTree(@Param("id") Long id);
 
 
-    // 🔹 Update status cả cây
+    // 🔹 Update status of categories
     @Modifying
     @Query("UPDATE Category c SET c.isActive = :status WHERE c.id IN :ids")
     void updateStatusByIds(List<Long> ids, boolean status);
+
+    // 🔹 Fetch all categories with parent and children for ingestion
+    @Query("""
+        SELECT DISTINCT c FROM Category c
+        LEFT JOIN FETCH c.parent
+        LEFT JOIN FETCH c.children
+        WHERE c.isActive = true
+        """)
+    List<Category> findAllActiveCategoriesWithRelations();
 
 }

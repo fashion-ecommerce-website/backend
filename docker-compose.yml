@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     container_name: postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-fit_db}
@@ -12,6 +12,8 @@ services:
       - "5433:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
+    labels:
+      - "org.springframework.boot.service-connection=postgres"
 
   redis:
     image: redis:7

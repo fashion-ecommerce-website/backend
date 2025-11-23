@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -27,7 +26,6 @@ import java.util.Set;
                 @UniqueConstraint(name = "uk_promotion_name_period", columnNames = {"name", "start_at", "end_at"})
         }
 )
-@Check(constraints = "end_at > start_at")
 @Getter
 @Setter
 @Builder

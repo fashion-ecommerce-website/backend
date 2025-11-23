@@ -31,6 +31,18 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
         """)
     Page<Product> findAllActiveProducts(Pageable pageable);
 
+    @Query("""
+        SELECT DISTINCT p FROM Product p
+        LEFT JOIN FETCH p.categories
+        LEFT JOIN FETCH p.details d
+        LEFT JOIN FETCH d.color
+        LEFT JOIN FETCH d.size
+        LEFT JOIN FETCH d.productImages pi
+        LEFT JOIN FETCH pi.image
+        WHERE p.isActive = true
+        """)
+    List<Product> findAllActiveProductsWithDetails();
+
     @Query(value = """
     SELECT p.*
     FROM products p
