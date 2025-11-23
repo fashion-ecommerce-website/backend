@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -61,16 +62,22 @@ public class ResponseParser {
             while (matcher.find()) {
                 String title = matcher.group(1).trim();
                 String productDetailIdStr = matcher.group(2).trim();
-                String colorName = matcher.group(3).trim();
-                String sizeLabel = matcher.group(4).trim();
+                final String colorName = matcher.group(3).trim();
+                final String sizeLabel = matcher.group(4).trim();
                 String priceStr = matcher.group(5).trim();
                 String quantityStr = matcher.group(6).trim();
                 String imageUrl = matcher.group(7).trim();
                 
                 // Parse productDetailId from GPT response
+                // Handle formats like "23", "23 (S)", etc. - extract just the number
                 Long productDetailId = null;
                 try {
-                    productDetailId = Long.parseLong(productDetailIdStr);
+                    // Remove any parentheses and extra text, extract just the number
+                    String cleanId = productDetailIdStr.replaceAll("[^0-9]", "").trim();
+                    if (!cleanId.isEmpty()) {
+                        productDetailId = Long.parseLong(cleanId);
+                        log.debug("Parsed productDetailId: {} from GPT response: {}", productDetailId, productDetailIdStr);
+                    }
                 } catch (NumberFormatException e) {
                     log.warn("Invalid productDetailId in GPT response: {}", productDetailIdStr);
                 }
@@ -81,73 +88,229 @@ public class ResponseParser {
                     productDetail = productDetailRepository
                             .findActiveProductDetailByIdWithRelations(productDetailId)
                             .orElse(null);
+                    
+                    // If productDetailId not found, it might be a productId instead
+                    // Try to find a ProductDetail by productId
+                    if (productDetail == null) {
+                        log.warn("ProductDetail not found for ID: {}. Checking if it's a productId...", productDetailId);
+                        // Check if this ID is actually a productId
+                        try {
+                            List<ProductDetail> details = productDetailRepository
+                                    .findActiveDetailsByProductIdWithProduct(productDetailId);
+                            if (!details.isEmpty()) {
+                                // Try to match by color and size if provided
+                                if (!colorName.isEmpty() && !sizeLabel.isEmpty()) {
+                                    ProductDetail matched = details.stream()
+                                            .filter(d -> d.getColor() != null && 
+                                                    d.getColor().getName().equalsIgnoreCase(colorName) &&
+                                                    d.getSize() != null && 
+                                                    d.getSize().getLabel().equalsIgnoreCase(sizeLabel))
+                                            .findFirst()
+                                            .orElse(null);
+                                    if (matched != null) {
+                                        productDetail = matched;
+                                        log.info("Found ProductDetail {} for productId {} matching color={}, size={}", 
+                                                productDetail.getId(), productDetailId, colorName, sizeLabel);
+                                    }
+                                }
+                                
+                                // If no match by color/size, use the first available
+                                if (productDetail == null) {
+                                    productDetail = details.get(0);
+                                    log.info("Found ProductDetail {} for productId {} (first available)", 
+                                            productDetail.getId(), productDetailId);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("Error checking if ID {} is a productId: {}", productDetailId, e.getMessage());
+                        }
+                    }
+                }
+                
+                // If still not found, try to find by title + color + size (most accurate matching)
+                // This is the PRIMARY method to ensure we get the correct productDetailId
+                // ALWAYS use this method to verify and get the correct productDetailId
+                if (productDetail == null && !title.isEmpty() && !colorName.isEmpty() && !sizeLabel.isEmpty()) {
+                    try {
+                        log.info("Trying to find ProductDetail by title='{}', color='{}', size='{}'", title, colorName, sizeLabel);
+                        List<ProductDetail> matchedDetails = productDetailRepository
+                                .findByProductTitleAndColorAndSize(title, colorName, sizeLabel);
+                        if (!matchedDetails.isEmpty()) {
+                            productDetail = matchedDetails.get(0);
+                            log.info("Found ProductDetail {} by title + color + size matching (objectId will be {})", 
+                                    productDetail.getId(), productDetail.getId());
+                        } else {
+                            log.warn("No ProductDetail found by title='{}', color='{}', size='{}'. Trying fuzzy matching...", 
+                                    title, colorName, sizeLabel);
+                            
+                            // Try fuzzy matching - search for products with similar title
+                            // Try different color name variations
+                            String[] colorVariations = {
+                                colorName,
+                                colorName.toLowerCase(),
+                                colorName.toUpperCase(),
+                                // Vietnamese color name variations
+                                colorName.equalsIgnoreCase("black") ? "Đen" : 
+                                colorName.equalsIgnoreCase("đen") ? "black" :
+                                colorName.equalsIgnoreCase("blue") ? "Xanh" :
+                                colorName.equalsIgnoreCase("xanh") ? "blue" :
+                                colorName
+                            };
+                            
+                            for (String colorVar : colorVariations) {
+                                if (colorVar == null || colorVar.equals(colorName)) continue;
+                                matchedDetails = productDetailRepository
+                                        .findByProductTitleAndColorAndSize(title, colorVar, sizeLabel);
+                                if (!matchedDetails.isEmpty()) {
+                                    productDetail = matchedDetails.get(0);
+                                    log.info("Found ProductDetail {} by fuzzy color matching: '{}' -> '{}'", 
+                                            productDetail.getId(), colorName, colorVar);
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error finding ProductDetail by title + color + size: {}", e.getMessage());
+                    }
+                }
+                
+                // CRITICAL: Even if we found productDetail by ID, verify it matches title + color + size
+                // This ensures we always get the correct productDetailId, not a wrong one
+                if (productDetail != null && !title.isEmpty() && !colorName.isEmpty() && !sizeLabel.isEmpty()) {
+                    try {
+                        // Verify the found productDetail matches the title + color + size
+                        boolean matches = false;
+                        if (productDetail.getProduct() != null) {
+                            String productTitle = productDetail.getProduct().getTitle();
+                            String detailColor = productDetail.getColor() != null ? productDetail.getColor().getName() : "";
+                            String detailSize = productDetail.getSize() != null ? productDetail.getSize().getLabel() : "";
+                            
+                            matches = productTitle.toLowerCase().contains(title.toLowerCase()) &&
+                                      detailColor.equalsIgnoreCase(colorName) &&
+                                      detailSize.equalsIgnoreCase(sizeLabel);
+                        }
+                        
+                        if (!matches) {
+                            log.warn("Found ProductDetail {} but it doesn't match title='{}', color='{}', size='{}'. " +
+                                    "Searching again by title + color + size...", 
+                                    productDetail.getId(), title, colorName, sizeLabel);
+                            
+                            // Search again by title + color + size to get the correct one
+                            List<ProductDetail> matchedDetails = productDetailRepository
+                                    .findByProductTitleAndColorAndSize(title, colorName, sizeLabel);
+                            if (!matchedDetails.isEmpty()) {
+                                productDetail = matchedDetails.get(0);
+                                log.info("Found correct ProductDetail {} by title + color + size verification", productDetail.getId());
+                            } else {
+                                log.warn("Could not find matching ProductDetail by title + color + size. Using found one: {}", 
+                                        productDetail.getId());
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error verifying ProductDetail match: {}", e.getMessage());
+                    }
+                }
+                
+                // CRITICAL: If we still don't have productDetail, we MUST find it before setting objectId
+                // Never set objectId to productId - it MUST always be productDetailId
+                // Try one more time with productIds from the query to find the correct ProductDetail
+                if (productDetail == null && !productIds.isEmpty() && !colorName.isEmpty() && !sizeLabel.isEmpty()) {
+                    log.warn("Still no ProductDetail found. Trying to find by productIds + color + size...");
+                    try {
+                        // Try to find ProductDetail using productIds from vector search
+                        ProductDetail foundDetail = findExactProductDetailByColorAndSize(
+                                new ArrayList<>(productIds), colorName, sizeLabel);
+                        if (foundDetail != null) {
+                            productDetail = foundDetail;
+                            log.info("Found ProductDetail {} using productIds + color + size", productDetail.getId());
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error finding ProductDetail by productIds + color + size: {}", e.getMessage());
+                    }
+                }
+                
+                if (productDetail == null) {
+                    log.error("CRITICAL: Could not find ProductDetail for title='{}', color='{}', size='{}', productDetailId={}. " +
+                            "Trying database recommendations as fallback.", title, colorName, sizeLabel, productDetailId);
+                    
+                    // Try to find matching recommendation from database
+                    if (!databaseRecommendations.isEmpty()) {
+                        ChatbotResponse.ProductRecommendation matched = findMatchingByTitleColorAndSize(
+                                title, colorName, sizeLabel, databaseRecommendations);
+                        if (matched != null && matched.getObjectId() != null) {
+                            // Verify that matched.getObjectId() is actually a productDetailId, not productId
+                            // Try to find the ProductDetail to confirm
+                            Optional<ProductDetail> verifyDetail = productDetailRepository
+                                    .findActiveProductDetailByIdWithRelations(matched.getObjectId());
+                            if (verifyDetail.isPresent()) {
+                                // Confirmed it's a productDetailId - use it
+                                parsedRecommendations.add(matched);
+                                log.info("Used database recommendation with objectId={} (verified productDetailId) as fallback for title='{}'", 
+                                        matched.getObjectId(), title);
+                                continue; // Skip to next iteration
+                            } else {
+                                log.warn("Matched recommendation has objectId={} but it's not a valid productDetailId. Skipping.", 
+                                        matched.getObjectId());
+                            }
+                        }
+                    }
+                    
+                    // If still no match, skip this recommendation
+                    log.warn("Skipping recommendation - no valid ProductDetail found for title='{}', color='{}', size='{}'", 
+                            title, colorName, sizeLabel);
+                    continue;
                 }
                 
                 ChatbotResponse.ProductRecommendation recommendation = new ChatbotResponse.ProductRecommendation();
                 
-                if (productDetail != null) {
-                    // Use ProductDetail from database
-                    recommendation.setObjectId(productDetail.getId());
-                    recommendation.setTitle(title); // Use GPT title
-                    recommendation.setDescription(
-                            productDetail.getProduct() != null && 
-                            productDetail.getProduct().getDescription() != null
-                                    ? productDetail.getProduct().getDescription()
-                                    : ChatbotConstants.EMPTY_STRING);
-                    
-                    // Get image from database if GPT doesn't provide
-                    if (imageUrl.isEmpty() || ChatbotConstants.EMPTY_STRING.equals(imageUrl)) {
-                        imageUrl = getFirstImageUrl(productDetail.getId());
-                    }
-                    recommendation.setImageUrl(imageUrl);
-                    
-                    // Use data from database if GPT doesn't provide
-                    if (colorName.isEmpty() && productDetail.getColor() != null) {
-                        colorName = productDetail.getColor().getName();
-                    }
-                    if (sizeLabel.isEmpty() && productDetail.getSize() != null) {
-                        sizeLabel = productDetail.getSize().getLabel();
-                    }
-                    if (priceStr.isEmpty() && productDetail.getPrice() != null) {
-                        priceStr = productDetail.getPrice().toString();
-                    }
-                    if (quantityStr.isEmpty() && productDetail.getQuantity() != null) {
-                        quantityStr = productDetail.getQuantity().toString();
-                    }
-                } else {
-                    // Fallback: try to find by color and size if productDetailId not found
-                    log.warn("ProductDetail not found for ID: {}. Trying to find by color and size.", productDetailId);
-                    // This will be handled by fallback logic below
+                // Use ProductDetail from database - objectId MUST be productDetailId
+                recommendation.setObjectId(productDetail.getId()); // This is guaranteed to be productDetailId
+                recommendation.setTitle(title); // Use GPT title
+                recommendation.setDescription(
+                        productDetail.getProduct() != null && 
+                        productDetail.getProduct().getDescription() != null
+                                ? productDetail.getProduct().getDescription()
+                                : ChatbotConstants.EMPTY_STRING);
+                
+                // Get image from database if GPT doesn't provide
+                if (imageUrl.isEmpty() || ChatbotConstants.EMPTY_STRING.equals(imageUrl)) {
+                    imageUrl = getFirstImageUrl(productDetail.getId());
+                }
+                recommendation.setImageUrl(imageUrl);
+                
+                // Use data from database if GPT doesn't provide
+                String finalColorName = colorName;
+                String finalSizeLabel = sizeLabel;
+                if (colorName.isEmpty() && productDetail.getColor() != null) {
+                    finalColorName = productDetail.getColor().getName();
+                }
+                if (sizeLabel.isEmpty() && productDetail.getSize() != null) {
+                    finalSizeLabel = productDetail.getSize().getLabel();
+                }
+                if (priceStr.isEmpty() && productDetail.getPrice() != null) {
+                    priceStr = productDetail.getPrice().toString();
+                }
+                if (quantityStr.isEmpty() && productDetail.getQuantity() != null) {
+                    quantityStr = productDetail.getQuantity().toString();
                 }
                 
-                // If still no productDetail found, use fallback
-                if (productDetail == null && !databaseRecommendations.isEmpty()) {
-                    // Try to find matching recommendation
-                    ChatbotResponse.ProductRecommendation matched = findMatchingByColorAndSize(
-                            colorName, sizeLabel, databaseRecommendations);
-                    if (matched != null) {
-                        recommendation.setObjectId(matched.getObjectId());
-                        recommendation.setTitle(title);
-                        recommendation.setDescription(matched.getDescription());
-                        recommendation.setImageUrl(imageUrl.isEmpty() || ChatbotConstants.EMPTY_STRING.equals(imageUrl) 
-                            ? matched.getImageUrl() : imageUrl);
-                    } else {
-                        // Use first available
-                        ChatbotResponse.ProductRecommendation first = databaseRecommendations.get(0);
-                        recommendation.setObjectId(first.getObjectId());
-                        recommendation.setTitle(title);
-                        recommendation.setDescription(first.getDescription());
-                        recommendation.setImageUrl(imageUrl.isEmpty() || ChatbotConstants.EMPTY_STRING.equals(imageUrl) 
-                                ? first.getImageUrl() : imageUrl);
-                    }
-                }
-                
-                recommendation.setColor(colorName);
-                recommendation.setSize(sizeLabel);
+                recommendation.setColor(finalColorName);
+                recommendation.setSize(finalSizeLabel);
                 recommendation.setPrice(parsePrice(priceStr));
                 recommendation.setQuantity(parseQuantity(quantityStr));
                 
-                parsedRecommendations.add(recommendation);
+                // Check for duplicates before adding
+                boolean isDuplicate = parsedRecommendations.stream()
+                        .anyMatch(r -> r.getObjectId() != null && r.getObjectId().equals(recommendation.getObjectId()));
+                
+                if (!isDuplicate) {
+                    parsedRecommendations.add(recommendation);
+                    log.debug("Added recommendation with objectId={} (productDetailId) for title='{}'", 
+                            productDetail.getId(), title);
+                } else {
+                    log.warn("Skipping duplicate recommendation with objectId={} for title='{}'", 
+                            recommendation.getObjectId(), title);
+                }
             }
             
             // Fallback: If pattern doesn't match (GPT didn't follow format), try simpler pattern
@@ -169,21 +332,49 @@ public class ResponseParser {
                         .collect(java.util.stream.Collectors.toSet());
                 
                 // Add database recommendations that are not already in parsed list
+                // BUT verify that objectId is a valid productDetailId, not productId
                 for (ChatbotResponse.ProductRecommendation dbRec : databaseRecommendations) {
                     if (parsedRecommendations.size() >= ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT) {
                         break;
                     }
-                    if (!parsedIds.contains(dbRec.getObjectId())) {
-                        parsedRecommendations.add(dbRec);
-                        parsedIds.add(dbRec.getObjectId());
+                    if (dbRec.getObjectId() != null && !parsedIds.contains(dbRec.getObjectId())) {
+                        // Verify this is a productDetailId by checking if ProductDetail exists
+                        Optional<ProductDetail> verifyDetail = productDetailRepository
+                                .findActiveProductDetailByIdWithRelations(dbRec.getObjectId());
+                        if (verifyDetail.isPresent()) {
+                            // Confirmed it's a productDetailId
+                            parsedRecommendations.add(dbRec);
+                            parsedIds.add(dbRec.getObjectId());
+                        } else {
+                            log.warn("Database recommendation has objectId={} which is not a valid productDetailId. Skipping.", 
+                                    dbRec.getObjectId());
+                        }
                     }
                 }
             }
             
             // If still no products parsed but we have database recommendations, use them
+            // BUT verify that all objectIds are productDetailIds, not productIds
             if (parsedRecommendations.isEmpty() && !databaseRecommendations.isEmpty()) {
-                log.warn("No products parsed from GPT. Using database recommendations.");
-                return databaseRecommendations;
+                log.warn("No products parsed from GPT. Using database recommendations, but verifying objectIds are productDetailIds...");
+                List<ChatbotResponse.ProductRecommendation> verifiedRecommendations = new ArrayList<>();
+                for (ChatbotResponse.ProductRecommendation rec : databaseRecommendations) {
+                    if (rec.getObjectId() != null) {
+                        // Verify this is a productDetailId by checking if ProductDetail exists
+                        Optional<ProductDetail> verifyDetail = productDetailRepository
+                                .findActiveProductDetailByIdWithRelations(rec.getObjectId());
+                        if (verifyDetail.isPresent()) {
+                            // Confirmed it's a productDetailId
+                            verifiedRecommendations.add(rec);
+                        } else {
+                            log.warn("Database recommendation has objectId={} which is not a valid productDetailId. Skipping.", 
+                                    rec.getObjectId());
+                        }
+                    }
+                }
+                if (!verifiedRecommendations.isEmpty()) {
+                    return verifiedRecommendations;
+                }
             }
             
         } catch (Exception e) {
@@ -234,6 +425,82 @@ public class ResponseParser {
         return ChatbotConstants.DEFAULT_SHORT_MESSAGE;
     }
 
+    /**
+     * Find exact ProductDetail by productIds, color name, and size label
+     * Tries all productIds until finds a match
+     */
+    private ProductDetail findExactProductDetailByColorAndSize(
+            List<Long> productIds,
+            String colorName,
+            String sizeLabel) {
+        
+        if (productIds == null || productIds.isEmpty() || colorName == null || colorName.isEmpty() || 
+            sizeLabel == null || sizeLabel.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // Find color by name (case insensitive)
+            var colorOpt = colorRepository.findByNameIgnoreCase(colorName);
+            if (colorOpt.isEmpty()) {
+                // Try Vietnamese variations
+                if (colorName.equalsIgnoreCase("black") || colorName.equalsIgnoreCase("đen")) {
+                    colorOpt = colorRepository.findByNameIgnoreCase("Đen");
+                } else if (colorName.equalsIgnoreCase("blue") || colorName.equalsIgnoreCase("xanh")) {
+                    colorOpt = colorRepository.findByNameIgnoreCase("Xanh");
+                }
+            }
+            if (colorOpt.isEmpty()) {
+                log.warn("Color not found: {}", colorName);
+                return null;
+            }
+            Short colorId = colorOpt.get().getId();
+            
+            // Find size by code or label (case insensitive)
+            var sizeOpt = sizeRepository.findByCodeIgnoreCase(sizeLabel);
+            if (sizeOpt.isEmpty()) {
+                // Try to find by label
+                sizeOpt = sizeRepository.findAll().stream()
+                        .filter(s -> s.getLabel() != null && 
+                                s.getLabel().equalsIgnoreCase(sizeLabel))
+                        .findFirst();
+            }
+            
+            if (sizeOpt.isEmpty()) {
+                log.warn("Size not found: {}", sizeLabel);
+                return null;
+            }
+            Short sizeId = sizeOpt.get().getId();
+            
+            // Try each productId to find matching ProductDetail
+            for (Long productId : productIds) {
+                Optional<ProductDetail> detailOpt = productDetailRepository
+                        .findByActiveProductAndColorAndSizeWithRelations(productId, colorId, sizeId);
+                
+                if (detailOpt.isPresent()) {
+                    return detailOpt.get();
+                }
+            }
+            
+            // If no exact match, try to find any ProductDetail for these products with the color
+            for (Long productId : productIds) {
+                List<ProductDetail> details = productDetailRepository
+                        .findActiveDetailsByProductIdWithProduct(productId);
+                for (ProductDetail detail : details) {
+                    if (detail.getColor() != null && detail.getColor().getId().equals(colorId) &&
+                        detail.getSize() != null && detail.getSize().getId().equals(sizeId)) {
+                        return detail;
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("Error finding ProductDetail by color and size: {}", e.getMessage(), e);
+        }
+        
+        return null;
+    }
+    
     /**
      * Find exact ProductDetail by productId, color name, and size label
      */
@@ -412,6 +679,18 @@ public class ResponseParser {
             log.error("Error in fallback parsing: {}", e.getMessage(), e);
         }
         
+        // Remove duplicates from fallback parsed recommendations first
+        List<ChatbotResponse.ProductRecommendation> uniqueFallbackRecommendations = new ArrayList<>();
+        Set<Long> seenFallbackIds = new HashSet<>();
+        for (ChatbotResponse.ProductRecommendation rec : parsedRecommendations) {
+            if (rec.getObjectId() != null && !seenFallbackIds.contains(rec.getObjectId())) {
+                uniqueFallbackRecommendations.add(rec);
+                seenFallbackIds.add(rec.getObjectId());
+            }
+        }
+        parsedRecommendations = uniqueFallbackRecommendations;
+        log.debug("After removing duplicates from fallback: {} unique recommendations", parsedRecommendations.size());
+        
         // If fallback parsing resulted in too few products, supplement with database recommendations
         int minRecommendations = 4;
         if (parsedRecommendations.size() < minRecommendations && !databaseRecommendations.isEmpty()) {
@@ -421,6 +700,7 @@ public class ResponseParser {
             // Get productDetailIds already in parsed recommendations to avoid duplicates
             Set<Long> parsedIds = parsedRecommendations.stream()
                     .map(ChatbotResponse.ProductRecommendation::getObjectId)
+                    .filter(id -> id != null)
                     .collect(java.util.stream.Collectors.toSet());
             
             // Add database recommendations that are not already in parsed list
@@ -428,7 +708,7 @@ public class ResponseParser {
                 if (parsedRecommendations.size() >= ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT) {
                     break;
                 }
-                if (!parsedIds.contains(dbRec.getObjectId())) {
+                if (dbRec.getObjectId() != null && !parsedIds.contains(dbRec.getObjectId())) {
                     parsedRecommendations.add(dbRec);
                     parsedIds.add(dbRec.getObjectId());
                 }
@@ -454,6 +734,28 @@ public class ResponseParser {
         }
         
         return null;
+    }
+    
+    /**
+     * Find matching recommendation by title, color and size
+     */
+    private ChatbotResponse.ProductRecommendation findMatchingByTitleColorAndSize(
+            String title,
+            String colorName,
+            String sizeLabel,
+            List<ChatbotResponse.ProductRecommendation> recommendations) {
+        
+        // First try exact match by title + color + size
+        for (ChatbotResponse.ProductRecommendation rec : recommendations) {
+            if (rec.getTitle() != null && rec.getTitle().toLowerCase().contains(title.toLowerCase()) &&
+                rec.getColor() != null && rec.getColor().equalsIgnoreCase(colorName) &&
+                rec.getSize() != null && rec.getSize().equalsIgnoreCase(sizeLabel)) {
+                return rec;
+            }
+        }
+        
+        // Fallback: match by color + size only
+        return findMatchingByColorAndSize(colorName, sizeLabel, recommendations);
     }
 }
 

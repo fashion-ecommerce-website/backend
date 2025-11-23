@@ -122,10 +122,10 @@ public final class ChatbotConstants {
     public static final class RegexPatterns {
         private RegexPatterns() {}
         
-        // Product pattern with ID
+        // Product pattern with ID - handles formats like "23", "23 (S)", etc.
         public static final String PRODUCT_PATTERN_WITH_ID = 
                 "\\*\\*(.*?)\\*\\*.*?" +
-                "- ID:\\s*(\\d+).*?" +
+                "- ID:\\s*(\\d+)(?:\\s*\\([^)]+\\))?.*?" +
                 "- Màu sắc:\\s*(.*?)\\n.*?" +
                 "- Kích thước:\\s*(.*?)\\n.*?" +
                 "- Giá:\\s*(.*?)\\n.*?" +

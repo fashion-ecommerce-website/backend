@@ -76,6 +76,23 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
         LIMIT 1
         """, nativeQuery = true)
     Optional<String> findFirstImageUrlByDetailId(@Param("detailId") Long detailId);
+    
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        LEFT JOIN FETCH pd.product p
+        LEFT JOIN FETCH p.categories
+        LEFT JOIN FETCH pd.color c
+        LEFT JOIN FETCH pd.size s
+        WHERE LOWER(p.title) LIKE LOWER(CONCAT('%', :title, '%'))
+        AND LOWER(c.name) = LOWER(:colorName)
+        AND LOWER(s.label) = LOWER(:sizeLabel)
+        AND pd.isActive = true
+        ORDER BY pd.id ASC
+        """)
+    List<ProductDetail> findByProductTitleAndColorAndSize(
+            @Param("title") String title,
+            @Param("colorName") String colorName,
+            @Param("sizeLabel") String sizeLabel);
 }
 
 
