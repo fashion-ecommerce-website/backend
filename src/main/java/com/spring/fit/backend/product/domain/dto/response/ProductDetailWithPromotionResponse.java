@@ -41,6 +41,8 @@ public class ProductDetailWithPromotionResponse {
     private Map<String, Integer> mapSizeToQuantity;
 
     private List<String> description;
+    
+    private String categorySlug;
 }
 
 
