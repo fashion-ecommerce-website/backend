@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -21,6 +22,14 @@ public class CloudinaryService implements ImageService {
 
     private final Cloudinary cloudinary;
     private final CloudinaryProperties properties;
+
+    // NEW: upload từ File (dùng khi ta unzip file về disk)
+    @Override
+    public String uploadImage(File file, String folder) throws IOException {
+        Map uploadResult = cloudinary.uploader().upload(file,
+                ObjectUtils.asMap("folder", folder));
+        return uploadResult.get("secure_url").toString();
+    }
 
     @Override
     public String uploadImage(MultipartFile file, String folder) throws IOException {
@@ -61,4 +70,6 @@ public class CloudinaryService implements ImageService {
         log.warn("Could not extract public_id from URL: {}", url);
         return null;
     }
+
+
 }
