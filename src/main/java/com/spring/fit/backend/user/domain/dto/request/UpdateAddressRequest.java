@@ -20,14 +20,14 @@ public class UpdateAddressRequest {
 
     private String ward;
 
-    // GHN ward code (mã phường/xã theo GHN API)
     private String wardCode;
 
     private String city;
 
-    private String province;
+    private Integer provinceId;
 
-    // GHN district ID (mã quận/huyện theo GHN API)
+    private String districtName;
+
     private Integer districtId;
 
     private String countryCode;

@@ -22,9 +22,11 @@ public class AddressResponse {
     private String phone;
     private String line;
     private String ward;
-    private String wardCode; // GHN ward code
+    private String wardCode;
     private String city;
-    private Integer districtId; // GHN district ID
+    private Integer provinceId;
+    private String districtName;
+    private Integer districtId; 
     private String countryCode;
     private String postalCode;
     
@@ -44,6 +46,8 @@ public class AddressResponse {
                 .ward(address.getWard())
                 .wardCode(address.getWardCode())
                 .city(address.getCity())
+                .provinceId(address.getProvinceId())
+                .districtName(address.getDistrictName())
                 .districtId(address.getDistrictId())
                 .countryCode(address.getCountryCode())
                 .isDefault(address.isDefault())

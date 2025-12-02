@@ -30,9 +30,10 @@ public class CreateAddressRequest {
     @NotBlank(message = "City is required")
     private String city;
 
-    private String province;
+    private Integer provinceId;
 
-    // GHN district ID (mã quận/huyện theo GHN API)
+    private String districtName;
+
     private Integer districtId;
 
     private String countryCode;
