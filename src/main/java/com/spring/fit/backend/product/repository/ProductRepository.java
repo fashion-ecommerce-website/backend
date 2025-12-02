@@ -20,7 +20,8 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
           SELECT d.id, d.product_id, d.color_id, d.size_id, d.price, d.quantity,
                  d.slug AS product_slug,
                  p.title AS product_title,
-                 c.name  AS color_name
+                 c.name  AS color_name,
+                 p.created_at
           FROM product_details d
           JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
           JOIN colors   c ON c.id = d.color_id
@@ -44,7 +45,8 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
                  price,
                  quantity,
                  product_id,
-                 color_id
+                 color_id,
+                 created_at
           FROM filtered
           ORDER BY product_id, color_id, price   -- pick cheapest per (product,color)
         )
@@ -79,6 +81,8 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
           CASE WHEN :sortBy = 'productTitle' AND :sortDir = 'desc' THEN opc.product_title END DESC,
           CASE WHEN :sortBy = 'price'        AND :sortDir = 'asc'  THEN opc.price END ASC,
           CASE WHEN :sortBy = 'price'        AND :sortDir = 'desc' THEN opc.price END DESC,
+          CASE WHEN :sortBy = 'createdAt' AND :sortDir = 'asc' THEN opc.created_at END ASC,
+          CASE WHEN :sortBy = 'createdAt' AND :sortDir = 'desc' THEN opc.created_at END DESC,
           -- fallback mặc định khi client không gửi sort
           opc.product_title ASC, opc.detail_id ASC
         

@@ -51,7 +51,7 @@ public class ProductController {
             String priceBucket,
 
             @RequestParam(required = false, name="sort")
-            @Pattern(regexp = "^(price|productTitle|name)_(asc|desc)$", message = "Invalid sort format")
+            @Pattern(regexp = "^(price|productTitle|name|createdAt)_(asc|desc)$", message = "Invalid sort format")
             String sortBy,
 
             @RequestParam(defaultValue = "0")
