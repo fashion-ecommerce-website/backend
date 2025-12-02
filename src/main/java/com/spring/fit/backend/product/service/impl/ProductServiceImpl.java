@@ -156,7 +156,7 @@ public class ProductServiceImpl implements ProductService {
             
         } catch (Exception e) {
             log.error("Database query failed for category={}: {}", categorySlug, e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi truy vấn dữ liệu sản phẩm", e);
+            throw new RuntimeException("Error querying product data", e);
         }
     }
 
@@ -353,7 +353,7 @@ public class ProductServiceImpl implements ProductService {
             
         } catch (Exception e) {
             log.error("Error getting recently viewed products: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây", e);
+            throw new RuntimeException("Error getting list of recently viewed products", e);
         }
     }
 
@@ -429,7 +429,7 @@ public class ProductServiceImpl implements ProductService {
             
         } catch (Exception e) {
             log.error("Error getting recently viewed products with promotion: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm đã xem gần đây với promotion", e);
+            throw new RuntimeException("Error when getting list of recently viewed products with promotion", e);
         }
     }
 
@@ -487,7 +487,7 @@ public class ProductServiceImpl implements ProductService {
             
         } catch (Exception e) {
             log.error("Error getting products with promotion by productIds: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi lấy danh sách sản phẩm với promotion từ productIds", e);
+            throw new RuntimeException("Error when getting list of products with promotion from ProductIds", e);
         }
     }
 
@@ -568,7 +568,7 @@ public class ProductServiceImpl implements ProductService {
             throw e;
         } catch (Exception e) {
             log.error("Error getting product detail by ID {}: {}", detailId, e.getMessage(), e);
-            throw new RuntimeException("Lỗi khi lấy chi tiết sản phẩm", e);
+            throw new RuntimeException("Error getting product details", e);
         }
     }
 
@@ -576,11 +576,17 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public ProductDetailWithPromotionResponse getProductDetailByIdWithPromotion(Long detailId) {
         ProductDetailResponse base = getProductDetailById(detailId);
-        
-        // Lấy productId từ ProductDetail
+
         ProductDetail productDetail = productDetailRepository.findById(detailId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
         Long productId = productDetail.getProduct().getId();
+        
+        String categorySlug = null;
+        Product product = productDetail.getProduct();
+        if (product.getCategories() != null && !product.getCategories().isEmpty()) {
+            categorySlug = product.getCategories().iterator().next().getSlug();
+        }
+
         
         var applyRes = PromotionApplyResponse.builder().build();
         try {
@@ -612,6 +618,7 @@ public class ProductServiceImpl implements ProductService {
                 .colors(base.getColors())
                 .mapSizeToQuantity(base.getMapSizeToQuantity())
                 .description(base.getDescription())
+                .categorySlug(categorySlug)
                 .build();
     }
 
