@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/payments/webhook").permitAll()
+                        .requestMatchers("/api/webhooks/**").permitAll()  // Webhook endpoints (GHTK, GHN, etc.)
                         .requestMatchers("/api/users/**").authenticated()  // Require authentication for user endpoints
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().authenticated())

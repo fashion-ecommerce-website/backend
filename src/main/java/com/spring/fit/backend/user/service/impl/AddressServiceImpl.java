@@ -50,7 +50,9 @@ public class AddressServiceImpl implements AddressService {
                 .phone(request.getPhone())
                 .line(request.getLine())
                 .ward(request.getWard())
+                .wardCode(request.getWardCode())
                 .city(request.getCity())
+                .districtId(request.getDistrictId())
                 .countryCode(request.getCountryCode() != null ? request.getCountryCode() : "VN")
                 .isDefault(request.isDefault())
                 .build();
@@ -118,8 +120,14 @@ public class AddressServiceImpl implements AddressService {
         if (request.getWard() != null) {
             address.setWard(request.getWard());
         }
+        if (request.getWardCode() != null) {
+            address.setWardCode(request.getWardCode());
+        }
         if (request.getCity() != null) {
             address.setCity(request.getCity());
+        }
+        if (request.getDistrictId() != null) {
+            address.setDistrictId(request.getDistrictId());
         }
         if (request.getCountryCode() != null) {
             address.setCountryCode(request.getCountryCode());
