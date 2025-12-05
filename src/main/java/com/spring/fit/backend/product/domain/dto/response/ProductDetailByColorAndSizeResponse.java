@@ -12,6 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 public class ProductDetailByColorAndSizeResponse {
 
+    private Long detailId;
     private Long productId;
     private String title;
     private List<String> images;
