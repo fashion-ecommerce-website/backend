@@ -473,7 +473,7 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         Set<String> stopWords = Set.of(
             "có", "bán", "mua", "tìm", "giá", "màu", "size", "kích thước",
             "shop", "cửa hàng", "cho", "tôi", "bạn", "mình", "em", "anh",
-            "không", "gì", "nào", "đó", "này", "đây", "đó", "và", "hoặc"
+            "không", "gì", "nào", "đó", "này", "đây", "và", "hoặc"
         );
         
         String[] words = query.split("\\s+");
