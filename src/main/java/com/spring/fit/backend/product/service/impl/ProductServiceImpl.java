@@ -1180,6 +1180,7 @@ public class ProductServiceImpl implements ProductService {
 
             // 9. Build response
             ProductDetailByColorAndSizeResponse response = new ProductDetailByColorAndSizeResponse();
+            response.setDetailId(productDetail.getId());
             response.setProductId(request.getProductId());
             response.setTitle(product.getTitle());
             response.setImages(images);
