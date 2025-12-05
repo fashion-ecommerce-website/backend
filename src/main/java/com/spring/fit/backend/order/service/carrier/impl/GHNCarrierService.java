@@ -126,11 +126,17 @@ public class GHNCarrierService implements CarrierService {
                     url, entity, GHNTrackingResponse.class);
 
             GHNTrackingResponse body = response.getBody();
+            log.debug("GHN tracking response for {}: code={}, message={}", 
+                    trackingNumber, body != null ? body.getCode() : null, body != null ? body.getMessage() : null);
+            
             if (body == null || body.getCode() == null || body.getCode() != 200 || body.getData() == null) {
                 throw new ErrorException(HttpStatus.BAD_GATEWAY, "Unable to fetch tracking info from GHN");
             }
 
             GHNOrderData orderData = body.getData();
+            log.debug("GHN order data: status={}, logs count={}", 
+                    orderData.getStatus(), orderData.getLogs() != null ? orderData.getLogs().size() : 0);
+            
             List<TrackingEventData> events = mapTrackingHistory(orderData.getLogs());
 
             return TrackingResponse.builder()
@@ -304,13 +310,37 @@ public class GHNCarrierService implements CarrierService {
         }
 
         return logs.stream()
-                .map(log -> TrackingEventData.builder()
-                        .status(mapStatus(log.getStatus()))
-                        .location(log.getLocation())
-                        .description(log.getDescription())
-                        .eventTime(parseDate(log.getTime()))
+                .map(logItem -> TrackingEventData.builder()
+                        .status(mapStatus(logItem.getStatus()))
+                        .location(null) // GHN doesn't provide location in log
+                        .description(getStatusDescription(logItem.getStatus()))
+                        .eventTime(parseDate(logItem.getTime()))
                         .build())
                 .collect(Collectors.toList());
+    }
+    
+    private String getStatusDescription(String status) {
+        if (status == null) return null;
+        return switch (status.toLowerCase()) {
+            case "ready_to_pick" -> "Order is ready for pickup";
+            case "picking" -> "Shipper is picking up the package";
+            case "picked" -> "Package has been picked up";
+            case "storing" -> "Package is at warehouse";
+            case "transporting" -> "Package is in transit";
+            case "sorting" -> "Package is being sorted";
+            case "delivering" -> "Package is out for delivery";
+            case "delivered" -> "Package has been delivered";
+            case "delivery_fail" -> "Delivery attempt failed";
+            case "waiting_to_return" -> "Waiting to return to sender";
+            case "return" -> "Package returned to sender";
+            case "return_transporting" -> "Return package in transit";
+            case "return_sorting" -> "Return package being sorted";
+            case "returning" -> "Package is being returned";
+            case "return_fail" -> "Return attempt failed";
+            case "returned" -> "Package has been returned";
+            case "cancel" -> "Order has been cancelled";
+            default -> "Status: " + status;
+        };
     }
 
     private LocalDateTime parseDate(String value) {
@@ -319,6 +349,13 @@ public class GHNCarrierService implements CarrierService {
         }
 
         try {
+            // GHN returns ISO 8601 format: 2025-12-05T07:38:44.131Z
+            if (value.endsWith("Z") || value.contains("+")) {
+                return java.time.Instant.parse(value)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDateTime();
+            }
+            // Fallback to old format
             return LocalDateTime.parse(value, GHN_DATE_FORMATTER);
         } catch (Exception ex) {
             log.warn("Unable to parse GHN datetime [{}]: {}", value, ex.getMessage());
@@ -331,11 +368,14 @@ public class GHNCarrierService implements CarrierService {
             return OrderStatus.PENDING;
         }
 
-        // GHN status mapping
-        return switch (status.toUpperCase()) {
+        // GHN status mapping based on API docs
+        return switch (status.toLowerCase()) {
             case "ready_to_pick", "picking" -> OrderStatus.CONFIRMED;
-            case "storing", "transporting", "sorting", "delivering" -> OrderStatus.SHIPPED;
+            case "picked", "storing", "transporting", "sorting" -> OrderStatus.SHIPPED;
+            case "delivering", "delivery_fail" -> OrderStatus.SHIPPED;
             case "delivered" -> OrderStatus.DELIVERED;
+            case "waiting_to_return", "return", "return_transporting", "return_sorting", 
+                 "returning", "return_fail", "returned" -> OrderStatus.CANCELLED;
             case "cancel" -> OrderStatus.CANCELLED;
             default -> OrderStatus.PENDING;
         };
@@ -468,18 +508,30 @@ public class GHNCarrierService implements CarrierService {
 
     @Data
     private static class GHNOrderData {
+        @JsonProperty("order_code")
         private String orderCode;
+        
         private String status;
+        
+        @JsonProperty("current_warehouse_name")
         private String currentWarehouse;
+        
+        // GHN returns "log" not "logs"
+        @JsonProperty("log")
         private List<GHNLogItem> logs;
     }
 
     @Data
     private static class GHNLogItem {
+        // GHN log item structure based on API docs:
+        // { "status": "picking", "payment_type_id": "2", "updated_date": "2021-11-11T03:04:48.053Z" }
         private String status;
-        private String location;
-        private String description;
+        
+        @JsonProperty("updated_date")
         private String time;
+        
+        @JsonProperty("payment_type_id")
+        private String paymentTypeId;
     }
 }
 
