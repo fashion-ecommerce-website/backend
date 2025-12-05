@@ -45,30 +45,14 @@ public class ChatbotServiceImpl implements ChatbotService {
         }
 
         try {
-            // Extract product IDs from vector store search first
-            Set<Long> productIds = productRecommendationService.extractProductIdsFromQuery(message);
-            
-            // Check if query is asking about products we don't have
-            boolean isProductQuery = productRecommendationService.isProductRelatedQuery(message);
-            
-            // If it's a product query but no products found, return apology message
-            if (isProductQuery && productIds.isEmpty()) {
-                return buildNoProductFoundResponse();
-            }
-            
-            // If products found but might not be relevant, check relevance
-            if (!productIds.isEmpty()) {
-                boolean areProductsRelevant = productRecommendationService.checkProductsRelevance(message, productIds);
-                if (!areProductsRelevant) {
-                    return buildNoProductFoundResponse();
-                }
-            }
-            
             // Get response from GPT
             String gptResponse = chatClient.prompt()
                     .user(message)
                     .call()
                     .content();
+
+            // Extract product IDs from vector store search
+            Set<Long> productIds = productRecommendationService.extractProductIdsFromQuery(message);
 
             // Build response
             ChatbotResponse chatbotResponse = new ChatbotResponse();
@@ -103,45 +87,6 @@ public class ChatbotServiceImpl implements ChatbotService {
             log.error("Error processing chat: {}", e.getMessage(), e);
             throw new RuntimeException(ChatbotConstants.ERROR_PROCESSING_CHAT + e.getMessage(), e);
         }
-    }
-    
-    /**
-     * Build response when no relevant products found
-     */
-    private ChatbotResponse buildNoProductFoundResponse() {
-        ChatbotResponse response = new ChatbotResponse();
-        response.setType(ChatbotConstants.RESPONSE_TYPE_MESSAGE);
-        
-        // Get available product categories
-        List<String> availableCategories = productRecommendationService.getAvailableProductCategories();
-        
-        // Build apology message with shop introduction
-        StringBuilder message = new StringBuilder();
-        message.append("Xin lỗi, hiện tại shop chúng tôi không có sản phẩm bạn đang tìm kiếm. ");
-        message.append("FIT là cửa hàng chuyên bán đồ thời trang với các sản phẩm chất lượng cao. ");
-        message.append("Hiện tại shop đang có các sản phẩm sau:\n\n");
-        
-        if (!availableCategories.isEmpty()) {
-            for (int i = 0; i < availableCategories.size(); i++) {
-                message.append("• ").append(availableCategories.get(i));
-                if (i < availableCategories.size() - 1) {
-                    message.append("\n");
-                }
-            }
-        } else {
-            message.append("• Áo thun, áo sơ mi, áo polo\n");
-            message.append("• Quần short, quần jogger\n");
-            message.append("• Túi đeo chéo, túi tote\n");
-            message.append("• Mũ bóng chày, mũ bucket\n");
-            message.append("• Phụ kiện thời trang");
-        }
-        
-        message.append("\n\nNếu bạn cần hỗ trợ thêm về các sản phẩm hiện có, vui lòng cho mình biết nhé!");
-        
-        response.setMessage(message.toString());
-        response.setRecommendations(null);
-        
-        return response;
     }
 }
 

@@ -2,8 +2,6 @@ package com.spring.fit.backend.chatbot.service;
 
 import com.spring.fit.backend.chatbot.constants.ChatbotConstants;
 import com.spring.fit.backend.chatbot.domain.dto.ChatbotResponse;
-import com.spring.fit.backend.category.domain.entity.Category;
-import com.spring.fit.backend.category.repository.CategoryRepository;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import org.slf4j.Logger;
@@ -24,27 +22,12 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
 
     private final VectorStore vectorStore;
     private final ProductDetailRepository productDetailRepository;
-    private final CategoryRepository categoryRepository;
-
-    // Keywords that indicate product-related queries
-    private static final String[] PRODUCT_QUERY_KEYWORDS = {
-        "bán", "có", "mua", "sản phẩm", "hàng", "đồ", "áo", "quần", 
-        "túi", "giày", "mũ", "nón", "phụ kiện", "thời trang"
-    };
-    
-    // Keywords that indicate non-product queries (greetings, general questions)
-    private static final String[] NON_PRODUCT_KEYWORDS = {
-        "xin chào", "hello", "hi", "cảm ơn", "thanks", "tạm biệt", "bye",
-        "giờ", "thời gian", "địa chỉ", "address", "liên hệ", "contact"
-    };
 
     public ProductRecommendationServiceImpl(
             VectorStore vectorStore,
-            ProductDetailRepository productDetailRepository,
-            CategoryRepository categoryRepository) {
+            ProductDetailRepository productDetailRepository) {
         this.vectorStore = vectorStore;
         this.productDetailRepository = productDetailRepository;
-        this.categoryRepository = categoryRepository;
     }
 
     @Override
@@ -387,131 +370,6 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         recommendation.setQuantity(detail.getQuantity());
         
         return recommendation;
-    }
-    
-    @Override
-    public boolean isProductRelatedQuery(String query) {
-        if (query == null || query.trim().isEmpty()) {
-            return false;
-        }
-        
-        String queryLower = query.toLowerCase();
-        
-        // Check for non-product keywords first
-        for (String keyword : NON_PRODUCT_KEYWORDS) {
-            if (queryLower.contains(keyword)) {
-                return false;
-            }
-        }
-        
-        // Check for product-related keywords
-        for (String keyword : PRODUCT_QUERY_KEYWORDS) {
-            if (queryLower.contains(keyword)) {
-                return true;
-            }
-        }
-        
-        // If query contains question words about products, consider it product-related
-        if (queryLower.matches(".*(có|bán|mua|tìm|giá|màu|size|kích thước).*")) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    @Override
-    public boolean checkProductsRelevance(String query, Set<Long> productIds) {
-        if (productIds == null || productIds.isEmpty()) {
-            return false;
-        }
-        
-        String queryLower = query.toLowerCase();
-        
-        // Extract key terms from query
-        Set<String> queryTerms = extractKeyTerms(queryLower);
-        
-        // Get product details and check if they match query terms
-        for (Long productId : productIds) {
-            List<ProductDetail> details = productDetailRepository.findActiveDetailsByProductIdWithProduct(productId);
-            if (!details.isEmpty()) {
-                ProductDetail detail = details.get(0);
-                if (detail.getProduct() != null) {
-                    String productTitle = detail.getProduct().getTitle().toLowerCase();
-                    String productDescription = detail.getProduct().getDescription() != null 
-                            ? detail.getProduct().getDescription().toLowerCase() 
-                            : "";
-                    
-                    // Check if product title or description contains query terms
-                    boolean hasMatch = queryTerms.stream().anyMatch(term -> 
-                        productTitle.contains(term) || productDescription.contains(term)
-                    );
-                    
-                    // Also check categories
-                    if (!hasMatch && detail.getProduct().getCategories() != null) {
-                        hasMatch = detail.getProduct().getCategories().stream()
-                            .anyMatch(cat -> {
-                                String catName = cat.getName().toLowerCase();
-                                return queryTerms.stream().anyMatch(term -> catName.contains(term));
-                            });
-                    }
-                    
-                    if (hasMatch) {
-                        return true; // At least one product is relevant
-                    }
-                }
-            }
-        }
-        
-        // If no products match query terms, they're not relevant
-        return false;
-    }
-    
-    /**
-     * Extract key terms from query (remove common words)
-     */
-    private Set<String> extractKeyTerms(String query) {
-        Set<String> stopWords = Set.of(
-            "có", "bán", "mua", "tìm", "giá", "màu", "size", "kích thước",
-            "shop", "cửa hàng", "cho", "tôi", "bạn", "mình", "em", "anh",
-            "không", "gì", "nào", "đó", "này", "đây", "và", "hoặc"
-        );
-        
-        String[] words = query.split("\\s+");
-        Set<String> terms = new HashSet<>();
-        
-        for (String word : words) {
-            word = word.trim().toLowerCase();
-            if (word.length() > 1 && !stopWords.contains(word)) {
-                terms.add(word);
-            }
-        }
-        
-        return terms;
-    }
-    
-    @Override
-    public List<String> getAvailableProductCategories() {
-        try {
-            // Get all active parent categories (categories with no parent)
-            List<Category> parentCategories = categoryRepository.findByParentIsNull();
-            
-            return parentCategories.stream()
-                    .filter(cat -> cat.getIsActive() != null && cat.getIsActive())
-                    .map(Category::getName)
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("Error getting available categories: {}", e.getMessage(), e);
-            // Return default categories if error
-            return Arrays.asList(
-                "Áo thun", "Áo sơ mi", "Áo polo", "Áo hoodie",
-                "Quần short", "Quần jogger",
-                "Túi đeo chéo", "Túi tote", "Túi đeo vai",
-                "Mũ bóng chày", "Mũ bucket",
-                "Phụ kiện thời trang"
-            );
-        }
     }
 }
 
