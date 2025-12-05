@@ -58,13 +58,9 @@ public class ChatbotServiceImpl implements ChatbotService {
             ChatbotResponse chatbotResponse = new ChatbotResponse();
             
             if (!productIds.isEmpty()) {
-                // Get product recommendations from database
-                List<ChatbotResponse.ProductRecommendation> dbRecommendations = 
-                        productRecommendationService.getProductRecommendations(productIds);
-                
-                // Parse GPT response to extract product info and find exact ProductDetails
+                // Get product recommendations from database (đơn giản: duyệt productIds, tìm ProductDetail đầu tiên, build recommendation)
                 List<ChatbotResponse.ProductRecommendation> recommendations = 
-                        responseParser.parseProductRecommendations(gptResponse, productIds, dbRecommendations);
+                        productRecommendationService.getProductRecommendations(productIds);
                 
                 // Extract short message from GPT response
                 String shortMessage = responseParser.extractShortMessage(gptResponse);

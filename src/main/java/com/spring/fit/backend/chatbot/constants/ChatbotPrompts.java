@@ -32,48 +32,12 @@ public final class ChatbotPrompts {
             6. Consider the occasion and suggest appropriate style (formal, casual, sporty, etc.)
             7. If the user mentions a specific occasion (e.g., "tiệc ở khách sạn"), select products that match that occasion's style
             
-            PRODUCT LISTING FORMAT:
-            When listing products, you MUST include the productDetailId and imageUrl from the metadata.
-            Format products as:
-            **Product Title**
-            - ID: productDetailId (from metadata - THIS IS CRITICAL: use productDetailId, NOT productId)
-            - Màu sắc: Color (exact name from metadata, e.g., "Đen", "Xanh", "black")
-            - Kích thước: Size (exact label from metadata, e.g., "S", "M", "L")
-            - Giá: Price VND
-            - Số lượng còn: Quantity
-            - [Xem hình ảnh](ImageURL)
-            
-            CRITICAL: The metadata contains TWO different IDs:
-            - productId: The ID of the product (DO NOT use this in the ID field - THIS IS WRONG)
-            - productDetailId: The unique ID for this specific product variant (color + size combination) - USE THIS ONE ONLY
-            
-            HOW TO IDENTIFY productDetailId IN METADATA:
-            - When you see a document in the metadata, look for the field "productDetailId" (NOT "productId")
-            - Each document represents ONE specific product variant (one color + one size combination)
-            - The productDetailId is the unique identifier for that exact variant
-            - Example: If a product has 3 colors and 2 sizes, there will be 6 different documents, each with a different productDetailId
-            
-            FORMAT RULES:
-            - ID field must contain ONLY the productDetailId number (e.g., "104", "111", "23")
-            - DO NOT include size in parentheses like "23 (S)" - just use "23" or the actual productDetailId
-            - DO NOT use productId - it will cause errors
-            - The productDetailId in the ID field MUST match the color and size you're listing
-            
-            OTHER METADATA FIELDS:
-            - imageUrl: The first image URL for this product variant (use this in [Xem hình ảnh](imageUrl))
-            - imageUrls: Comma-separated list of image URLs (first 3 images)
-            - color, size, price, quantity: Product variant details
-            - categories: Product categories (use this to understand product type)
-            
-            IMPORTANT RULES:
-            1. ALWAYS use productDetailId from metadata, NEVER use productId
-            2. Each product can have multiple productDetails (different colors/sizes), and you must specify the exact productDetailId
-            3. The Product Title in your response should match the product title from metadata
-            4. The Color and Size must match exactly what's in the metadata for that specific productDetailId
-            5. If you see multiple productDetails for the same product title, you must use the correct productDetailId that matches the color and size you're recommending
-            6. The ID you put in the response MUST be the productDetailId that corresponds to the exact color and size combination you're listing
-            
-            Always use the imageUrl from metadata for the image link. If imageUrl is not available, you can use the first URL from imageUrls.
+            PRODUCT INFORMATION:
+            - When mentioning products in your response, you can reference them by their product title from metadata
+            - The system will automatically provide product recommendations with full details (productDetailId, color, size, price, images)
+            - You don't need to format product listings or include productDetailId in your response - just provide a helpful message
+            - Use product information from metadata to answer questions, but let the system handle detailed product listings
+            - Focus on providing a natural, conversational response about the products
             
             GENERAL GUIDELINES:
             - Be friendly, professional, and helpful
