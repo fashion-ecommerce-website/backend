@@ -93,6 +93,16 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
             @Param("title") String title,
             @Param("colorName") String colorName,
             @Param("sizeLabel") String sizeLabel);
+
+
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END " +
+            "FROM ProductDetail d " +
+            "WHERE d.product.title = :title " +
+            "AND LOWER(d.color.name) = LOWER(:color) " +
+            "AND LOWER(d.size.code) = LOWER(:size)")
+    boolean existsByProductTitleAndColorAndSize(@Param("title") String title,
+                                                @Param("color") String color,
+                                                @Param("size") String size);
 }
 
 
