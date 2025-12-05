@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Base64;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -105,7 +106,11 @@ public class ProductImportServiceImpl implements ProductImportService {
                 detail.setQuantity(quantity);
                 detail.setPrice(price);
                 detail.setLocalFiles(new ArrayList<>(files));
-                detail.setImageUrls(files.stream().map(File::getAbsolutePath).toList());
+                // Convert files to Base64 data URLs for frontend preview
+                detail.setImageUrls(files.stream()
+                        .map(this::fileToBase64DataUrl)
+                        .filter(Objects::nonNull)
+                        .toList());
 
                 // 5️⃣ Validate cơ bản
                 validateDetail(detail, categoryName, title, desc);
@@ -390,5 +395,24 @@ public class ProductImportServiceImpl implements ProductImportService {
                     .map(Path::toFile)
                     .forEach(File::delete);
         } catch (Exception ignored) {}
+    }
+
+    private String fileToBase64DataUrl(File file) {
+        try {
+            byte[] bytes = Files.readAllBytes(file.toPath());
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+            String mimeType = Files.probeContentType(file.toPath());
+            if (mimeType == null) {
+                String name = file.getName().toLowerCase();
+                if (name.endsWith(".png")) mimeType = "image/png";
+                else if (name.endsWith(".gif")) mimeType = "image/gif";
+                else if (name.endsWith(".webp")) mimeType = "image/webp";
+                else mimeType = "image/jpeg";
+            }
+            return "data:" + mimeType + ";base64," + base64;
+        } catch (IOException e) {
+            log.error("Failed to convert file to base64: {}", file.getAbsolutePath(), e);
+            return null;
+        }
     }
 }
