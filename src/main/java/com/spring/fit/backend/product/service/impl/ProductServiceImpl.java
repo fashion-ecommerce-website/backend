@@ -117,7 +117,7 @@ public class ProductServiceImpl implements ProductService {
                                 .skuId(card.getDetailId())
                                 .basePrice(card.getPrice())
                                 .build();
-                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        applyRes = promotionService.applyPromotionForSku(applyReq);
                     } catch (Exception ex) {
                         // fallback giữ nguyên giá nếu có lỗi
                         applyRes = PromotionApplyResponse.builder()
@@ -215,7 +215,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             log.warn("Error applying promotion for detailId {}: {}", card.getDetailId(), ex.getMessage());
@@ -396,7 +396,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             applyRes = PromotionApplyResponse.builder()
@@ -454,7 +454,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             applyRes = PromotionApplyResponse.builder()
@@ -594,7 +594,7 @@ public class ProductServiceImpl implements ProductService {
                     .skuId(base.getDetailId())
                     .basePrice(base.getPrice())
                     .build();
-            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+            applyRes = promotionService.applyPromotionForSku(applyReq);
         } catch (Exception ex) {
             applyRes = PromotionApplyResponse.builder()
                     .basePrice(base.getPrice())
@@ -1488,4 +1488,35 @@ public class ProductServiceImpl implements ProductService {
     // Records cho better type safety và immutability
     private record SortParams(String field, String direction) {}
     private record FilterParams(String title, List<String> colors, List<String> sizes, boolean colorsEmpty, boolean sizesEmpty) {}
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductSimpleResponse> getAllProductsSimple() {
+        log.info("Getting all products simple");
+        List<Product> products = productMainRepository.findAll();
+        return products.stream()
+                .map(p -> ProductSimpleResponse.builder()
+                        .id(p.getId())
+                        .name(p.getTitle())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductDetailSimpleResponse> getAllProductDetailsSimple() {
+        log.info("Getting all product details simple");
+        List<ProductDetail> details = productDetailRepository.findAll();
+        return details.stream()
+                .map(d -> {
+                    String name = d.getProduct().getTitle() + " - " + 
+                                  d.getColor().getName() + " - " + 
+                                  d.getSize().getLabel();
+                    return ProductDetailSimpleResponse.builder()
+                            .id(d.getId())
+                            .name(name)
+                            .build();
+                })
+                .toList();
+    }
 }

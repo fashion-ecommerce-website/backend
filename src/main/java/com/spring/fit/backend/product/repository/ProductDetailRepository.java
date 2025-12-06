@@ -103,6 +103,19 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
     boolean existsByProductTitleAndColorAndSize(@Param("title") String title,
                                                 @Param("color") String color,
                                                 @Param("size") String size);
+
+    @Query("SELECT pd.id FROM ProductDetail pd WHERE pd.product.id = :productId")
+    List<Long> findSkuIdsByProductId(@Param("productId") Long productId);
+
+    @Query(value = """
+        SELECT pd.id FROM product_details pd
+        JOIN product_categories pc ON pd.product_id = pc.product_id
+        WHERE pc.category_id = :categoryId
+    """, nativeQuery = true)
+    List<Long> findSkuIdsByCategoryId(@Param("categoryId") Long categoryId);
+
+    @Query("SELECT COUNT(pd) > 0 FROM ProductDetail pd WHERE pd.id = :id AND pd.isActive = true AND pd.product.isActive = true")
+    boolean existsActiveById(@Param("id") Long id);
 }
 
 
