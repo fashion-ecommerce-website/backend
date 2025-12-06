@@ -1420,9 +1420,12 @@ public class ProductServiceImpl implements ProductService {
             response.setCategoryId(product.getCategories().iterator().next().getId());
         }
 
-        // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì)
+        // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì) và detail ID tương ứng
         String thumbnail = getThumbnailForProduct(product.getId());
         response.setThumbnail(thumbnail);
+        
+        Long currentDetailId = productRepository.findFirstDetailIdByProductId(product.getId());
+        response.setCurrentDetailId(currentDetailId);
 
         // Lấy danh sách màu active và inactive
         List<ColorResponse> variantColors = new ArrayList<>();
