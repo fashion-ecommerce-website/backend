@@ -288,7 +288,7 @@ public class OrderServiceImpl implements OrderService {
                                 .skuId(detail.getProductDetail().getId())
                                 .basePrice(detail.getUnitPrice())
                                 .build();
-                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        applyRes = promotionService.applyPromotionForSku(applyReq);
                     } catch (Exception ex) {
                         // fallback giữ nguyên giá nếu có lỗi
                         applyRes = PromotionApplyResponse.builder()
