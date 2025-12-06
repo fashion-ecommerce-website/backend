@@ -153,7 +153,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .skuId(detailId)
                 .basePrice(unitPrice)
                 .build();
-                PromotionApplyResponse applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                PromotionApplyResponse applyRes = promotionService.applyPromotionForSku(applyReq);
         
                 // Create price data for the line item
                 SessionCreateParams.LineItem.PriceData priceData = SessionCreateParams.LineItem.PriceData.builder()
