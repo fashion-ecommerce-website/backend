@@ -138,7 +138,7 @@ public class WishlistServiceImpl implements WishlistService {
                     .skuId(detail.getId())
                     .basePrice(detail.getPrice())
                     .build();
-            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+            applyRes = promotionService.applyPromotionForSku(applyReq);
         } catch (Exception ex) {
             // fallback giữ nguyên giá nếu có lỗi
             applyRes = PromotionApplyResponse.builder()
