@@ -132,5 +132,17 @@ public interface ProductService {
      * @param id ID sản phẩm
      */
     void deleteProductDetail(Long id);
+
+    /**
+     * Lấy tất cả products (không pagination)
+     * @return List<ProductSimpleResponse> chứa id và name
+     */
+    List<ProductSimpleResponse> getAllProductsSimple();
+
+    /**
+     * Lấy tất cả product details (không pagination)
+     * @return List<ProductDetailSimpleResponse> chứa id và name (product title + color + size)
+     */
+    List<ProductDetailSimpleResponse> getAllProductDetailsSimple();
 }
 

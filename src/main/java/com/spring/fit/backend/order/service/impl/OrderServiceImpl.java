@@ -256,7 +256,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponse.AddressResponse mapAddressToResponse(
-            AddressEntity address) {
+            com.spring.fit.backend.user.domain.entity.AddressEntity address) {
         return OrderResponse.AddressResponse.builder()
                 .id(address.getId())
                 .fullName(address.getFullName())
@@ -272,13 +272,13 @@ public class OrderServiceImpl implements OrderService {
         if (orderDetails == null || orderDetails.isEmpty()) {
             return List.of();
         }
-        
+
         // Get orderId from first detail (all details belong to same order)
         Long orderId = orderDetails.iterator().next().getOrder().getId();
-        
+
         // Load all OrderDetailPromotions for this order in one query
         List<OrderDetailPromotion> orderDetailPromotions = orderDetailPromotionRepository.findByOrderId(orderId);
-        
+
         // Create a map for quick lookup: detailId -> OrderDetailPromotion
         Map<Long, OrderDetailPromotion> promotionMap = orderDetailPromotions.stream()
                 .collect(Collectors.toMap(
@@ -286,33 +286,33 @@ public class OrderServiceImpl implements OrderService {
                         odp -> odp,
                         (existing, replacement) -> existing // If duplicate, keep first
                 ));
-        
+
         return orderDetails.stream()
                 .map(detail -> {
                     // Get snapshot promotion data if exists
                     OrderDetailPromotion orderDetailPromotion = promotionMap.get(detail.getProductDetail().getId());
-                    
+
                     BigDecimal unitPrice = detail.getUnitPrice();
                     BigDecimal totalPrice = detail.getTotalPrice();
                     BigDecimal finalPrice;
                     Integer percentOff;
                     Long promotionId;
                     String promotionName;
-                    
+
                     if (orderDetailPromotion != null) {
                         // Use snapshot values from OrderDetailPromotion
                         BigDecimal discountAmount = orderDetailPromotion.getDiscountAmount();
                         promotionName = orderDetailPromotion.getPromotionName();
                         promotionId = orderDetailPromotion.getPromotion() != null
-                                ? orderDetailPromotion.getPromotion().getId() 
+                                ? orderDetailPromotion.getPromotion().getId()
                                 : null;
-                        
+
                         // Calculate finalPrice: totalPrice - discountAmount
                         finalPrice = totalPrice.subtract(discountAmount);
                         if (finalPrice.compareTo(BigDecimal.ZERO) < 0) {
                             finalPrice = BigDecimal.ZERO;
                         }
-                        
+
                         // Calculate percentOff from discountAmount and totalPrice
                         if (totalPrice.compareTo(BigDecimal.ZERO) > 0) {
                             percentOff = discountAmount
@@ -329,7 +329,7 @@ public class OrderServiceImpl implements OrderService {
                         promotionId = null;
                         promotionName = null;
                     }
-                    
+
                     return OrderResponse.OrderDetailResponse.builder()
                             .id(detail.getId())
                             .productDetailId(detail.getProductDetail().getId())

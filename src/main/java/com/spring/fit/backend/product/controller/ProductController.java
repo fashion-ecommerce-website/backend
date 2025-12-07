@@ -421,6 +421,32 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<ProductSimpleResponse>> getAllProductsSimple() {
+        log.info("Inside ProductController.getAllProductsSimple");
+        try {
+            List<ProductSimpleResponse> result = productService.getAllProductsSimple();
+            log.info("Inside ProductController.getAllProductsSimple success count={}", result.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Inside ProductController.getAllProductsSimple error={}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/admin/details/all")
+    public ResponseEntity<List<ProductDetailSimpleResponse>> getAllProductDetailsSimple() {
+        log.info("Inside ProductController.getAllProductDetailsSimple");
+        try {
+            List<ProductDetailSimpleResponse> result = productService.getAllProductDetailsSimple();
+            log.info("Inside ProductController.getAllProductDetailsSimple success count={}", result.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Inside ProductController.getAllProductDetailsSimple error={}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
     // ============ Helper Methods ============
 
     private Map<Short, List<MultipartFile>> parseImagesByColor(MultiValueMap<String, MultipartFile> images) {

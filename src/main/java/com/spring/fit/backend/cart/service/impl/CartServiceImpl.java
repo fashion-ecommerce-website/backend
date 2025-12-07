@@ -137,7 +137,7 @@ public class CartServiceImpl implements CartService {
                                     .skuId(cartDetail.getProductDetail().getId())
                                     .basePrice(cartDetail.getProductDetail().getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             applyRes = PromotionApplyResponse.builder()
