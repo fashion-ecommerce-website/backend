@@ -154,9 +154,7 @@ public class VoucherServiceImpl implements VoucherService {
 
             if (!v.isActive()) continue;
 
-            // Kiểm tra thời gian chỉ khi startAt hoặc endAt có giá trị
-            if ((v.getStartAt() != null && v.getStartAt().isAfter(now)) || 
-                (v.getEndAt() != null && v.getEndAt().isBefore(now))) {
+            if (v.getStartAt().isAfter(now) || v.getEndAt().isBefore(now)) {
                 available = false;
                 message = "Voucher is not active in the current period";
             }
