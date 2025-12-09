@@ -26,6 +26,7 @@ public class AdminVoucherResponse {
     Boolean isActive;
     AudienceType audienceType;
     List<Short> rankIds;
+    Long usageCount;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }
