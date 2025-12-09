@@ -154,7 +154,9 @@ public class VoucherServiceImpl implements VoucherService {
 
             if (!v.isActive()) continue;
 
-            if (v.getStartAt().isAfter(now) || v.getEndAt().isBefore(now)) {
+            // Kiểm tra thời gian chỉ khi startAt hoặc endAt có giá trị
+            if ((v.getStartAt() != null && v.getStartAt().isAfter(now)) || 
+                (v.getEndAt() != null && v.getEndAt().isBefore(now))) {
                 available = false;
                 message = "Voucher is not active in the current period";
             }
@@ -209,6 +211,11 @@ public class VoucherServiceImpl implements VoucherService {
 
         if (voucher == null) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher not found");
+        }
+
+        // Validate usage limits again after locking to prevent race conditions
+        if (!checkUsageLimits(voucher, userId)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher usage limit exceeded");
         }
 
         // Calculate discount
@@ -371,6 +378,9 @@ public class VoucherServiceImpl implements VoucherService {
             rankIds = voucherRankRuleRepository.findRankIdsByVoucherId(v.getId());
         }
         
+        // Đếm số lượt sử dụng voucher (chỉ đếm những lượt có status APPLIED)
+        Long usageCount = voucherUsageRepository.countTotalUsage(v.getId(), VoucherUsageStatus.APPLIED);
+        
         return AdminVoucherResponse.builder()
                 .id(v.getId())
                 .name(v.getName())
@@ -386,6 +396,7 @@ public class VoucherServiceImpl implements VoucherService {
                 .isActive(v.isActive())
                 .audienceType(v.getAudienceType())
                 .rankIds(rankIds)
+                .usageCount(usageCount)
                 .createdAt(v.getCreatedAt())
                 .updatedAt(v.getUpdatedAt())
                 .build();
