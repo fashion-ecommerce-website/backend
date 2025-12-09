@@ -110,6 +110,8 @@ public class PromotionServiceImpl implements PromotionService {
         validatePromotionRequest(request);
         Promotion p = promotionRepository.findById(id).orElseThrow(() -> new RuntimeException("Promotion not found"));
 
+        validatePromotionNotStarted(p);
+
         // Nếu request có targets mới, validate và cập nhật targets
         if (request.getTargets() != null) {
             // Validate targets mới
@@ -335,6 +337,15 @@ public class PromotionServiceImpl implements PromotionService {
                 .promotionId(promotion.getId())
                 .promotionName(promotion.getName())
                 .build();
+    }
+
+    private void validatePromotionNotStarted(Promotion promotion) {
+        LocalDateTime now = LocalDateTime.now();
+        if (!promotion.getStartAt().isAfter(now)) {
+            throw new IllegalArgumentException(
+                    "Cannot update promotion: Promotion has already started or ended. " +
+                    "Start time: " + promotion.getStartAt() + ", Current time: " + now);
+        }
     }
 
     private void validatePromotionRequest(PromotionRequest request) {
