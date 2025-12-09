@@ -30,7 +30,7 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<PageResult<ProductCardWithPromotionResponse>> getProductsByCategory(
-            @RequestParam
+            @RequestParam(required = false)
             @Size(max = 100, message = "Category cannot exceed 100 characters")
             String category,
 
