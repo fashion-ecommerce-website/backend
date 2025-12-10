@@ -537,4 +537,73 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
             @Param("currentTime") java.time.LocalDateTime currentTime,
             Pageable pageable
     );
+
+    @Query(value = """
+        WITH RECURSIVE category_tree AS (
+            SELECT id FROM categories WHERE id = :rootCategoryId AND is_active = TRUE
+            UNION ALL
+            SELECT c.id 
+            FROM categories c
+            INNER JOIN category_tree ct ON c.parent_id = ct.id
+            WHERE c.is_active = TRUE
+        ),
+        filtered AS (
+            SELECT d.id, d.product_id, d.color_id, d.size_id, d.price, d.quantity,
+                   d.slug AS product_slug,
+                   p.title AS product_title,
+                   c.name AS color_name,
+                   p.created_at
+            FROM product_details d
+            JOIN products p ON p.id = d.product_id AND p.is_active = TRUE
+            JOIN colors c ON c.id = d.color_id
+            JOIN sizes s ON s.id = d.size_id
+            JOIN product_categories pc ON pc.product_id = p.id
+            WHERE d.is_active = TRUE
+              AND pc.category_id IN (SELECT id FROM category_tree)
+        ),
+        one_per_product AS (
+            SELECT DISTINCT ON (product_id)
+                   id AS detail_id,
+                   product_id,
+                   product_title,
+                   product_slug,
+                   color_name,
+                   price,
+                   quantity,
+                   color_id,
+                   created_at
+            FROM filtered
+            ORDER BY product_id, price ASC
+        )
+        SELECT
+            opp.product_id AS productId,
+            opp.detail_id AS detailId,
+            opp.product_title AS productTitle,
+            opp.product_slug AS productSlug,
+            opp.color_name AS colorName,
+            opp.price AS price,
+            opp.quantity AS quantity,
+            (SELECT ARRAY(
+                SELECT DISTINCT c2.name
+                FROM product_details d2
+                JOIN colors c2 ON c2.id = d2.color_id
+                WHERE d2.product_id = opp.product_id AND d2.is_active = TRUE
+                ORDER BY c2.name
+            )) AS colors,
+            (SELECT ARRAY(
+                SELECT i.url
+                FROM product_images pi
+                JOIN images i ON i.id = pi.image_id
+                WHERE pi.detail_id = opp.detail_id
+                ORDER BY pi.created_at
+                LIMIT 2
+            )) AS imageUrls
+        FROM one_per_product opp
+        ORDER BY opp.created_at DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<ProductCardView> findNewArrivalsByRootCategory(
+            @Param("rootCategoryId") Long rootCategoryId,
+            @Param("limit") int limit
+    );
 }
