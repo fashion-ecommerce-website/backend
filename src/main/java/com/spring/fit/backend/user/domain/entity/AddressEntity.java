@@ -51,8 +51,22 @@ public class AddressEntity {
     @Column(name = "ward")
     private String ward;
 
+    // GHN ward code (mã phường/xã theo GHN API)
+    @Column(name = "ward_code", length = 20)
+    private String wardCode;
+
     @Column(name = "city")
     private String city;
+
+    @Column(name = "province_id")
+    private Integer provinceId;
+
+    @Column(name = "district_name")
+    private String districtName;
+
+    // GHN district ID (mã quận/huyện theo GHN API)
+    @Column(name = "district_id")
+    private Integer districtId;
 
     @Column(name = "country_code", length = 3)
     @Builder.Default

@@ -13,10 +13,10 @@ import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.order.service.OrderService;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
-import com.spring.fit.backend.promotion.domain.dto.request.PromotionApplyRequest;
-import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyResponse;
-import com.spring.fit.backend.promotion.service.PromotionService;
+import com.spring.fit.backend.promotion.domain.entity.OrderDetailPromotion;
+import com.spring.fit.backend.promotion.repository.OrderDetailPromotionRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
+import com.spring.fit.backend.user.domain.entity.AddressEntity;
 import com.spring.fit.backend.user.repository.AddressRepository;
 import com.spring.fit.backend.voucher.domain.entity.Voucher;
 import com.spring.fit.backend.voucher.repository.VoucherRepository;
@@ -29,8 +29,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,7 +47,7 @@ public class OrderServiceImpl implements OrderService {
     private final AddressRepository addressRepository;
     private final ProductDetailRepository productDetailRepository;
     private final VoucherRepository voucherRepository;
-    private final PromotionService promotionService;
+    private final OrderDetailPromotionRepository orderDetailPromotionRepository;
 
     @Override
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
@@ -267,54 +269,83 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private List<OrderResponse.OrderDetailResponse> mapOrderDetailsToResponse(Set<OrderDetail> orderDetails) {
+        if (orderDetails == null || orderDetails.isEmpty()) {
+            return List.of();
+        }
+
+        // Get orderId from first detail (all details belong to same order)
+        Long orderId = orderDetails.iterator().next().getOrder().getId();
+
+        // Load all OrderDetailPromotions for this order in one query
+        List<OrderDetailPromotion> orderDetailPromotions = orderDetailPromotionRepository.findByOrderId(orderId);
+
+        // Create a map for quick lookup: detailId -> OrderDetailPromotion
+        Map<Long, OrderDetailPromotion> promotionMap = orderDetailPromotions.stream()
+                .collect(Collectors.toMap(
+                        odp -> odp.getDetail().getId(),
+                        odp -> odp,
+                        (existing, replacement) -> existing // If duplicate, keep first
+                ));
+
         return orderDetails.stream()
                 .map(detail -> {
-                    // Tạo base response từ entity
-                    OrderResponse.OrderDetailResponse baseResponse = OrderResponse.OrderDetailResponse.builder()
+                    // Get snapshot promotion data if exists
+                    OrderDetailPromotion orderDetailPromotion = promotionMap.get(detail.getProductDetail().getId());
+
+                    BigDecimal unitPrice = detail.getUnitPrice();
+                    BigDecimal totalPrice = detail.getTotalPrice();
+                    BigDecimal finalPrice;
+                    Integer percentOff;
+                    Long promotionId;
+                    String promotionName;
+
+                    if (orderDetailPromotion != null) {
+                        // Use snapshot values from OrderDetailPromotion
+                        BigDecimal discountAmount = orderDetailPromotion.getDiscountAmount();
+                        promotionName = orderDetailPromotion.getPromotionName();
+                        promotionId = orderDetailPromotion.getPromotion() != null
+                                ? orderDetailPromotion.getPromotion().getId()
+                                : null;
+
+                        // Calculate finalPrice: totalPrice - discountAmount
+                        finalPrice = totalPrice.subtract(discountAmount);
+                        if (finalPrice.compareTo(BigDecimal.ZERO) < 0) {
+                            finalPrice = BigDecimal.ZERO;
+                        }
+
+                        // Calculate percentOff from discountAmount and totalPrice
+                        if (totalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                            percentOff = discountAmount
+                                    .multiply(BigDecimal.valueOf(100))
+                                    .divide(totalPrice, 2, RoundingMode.HALF_UP)
+                                    .intValue();
+                        } else {
+                            percentOff = 0;
+                        }
+                    } else {
+                        // No promotion applied at order creation time
+                        finalPrice = totalPrice;
+                        percentOff = 0;
+                        promotionId = null;
+                        promotionName = null;
+                    }
+
+                    return OrderResponse.OrderDetailResponse.builder()
                             .id(detail.getId())
                             .productDetailId(detail.getProductDetail().getId())
                             .title(detail.getTitle())
                             .colorLabel(detail.getColorLabel())
                             .sizeLabel(detail.getSizeLabel())
                             .quantity(detail.getQuantity())
-                            .unitPrice(detail.getUnitPrice())
-                            .totalPrice(detail.getTotalPrice())
-                            .build();
-                    
-                    // Áp dụng promotion
-                    var applyRes = PromotionApplyResponse.builder().build();
-                    try {
-                        var applyReq = PromotionApplyRequest.builder()
-                                .skuId(detail.getProductDetail().getId())
-                                .basePrice(detail.getUnitPrice())
-                                .build();
-                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
-                    } catch (Exception ex) {
-                        // fallback giữ nguyên giá nếu có lỗi
-                        applyRes = PromotionApplyResponse.builder()
-                                .basePrice(detail.getUnitPrice())
-                                .finalPrice(detail.getUnitPrice())
-                                .percentOff(0)
-                                .build();
-                    }
-                    
-                    // Cập nhật thông tin promotion
-                    return OrderResponse.OrderDetailResponse.builder()
-                            .id(baseResponse.getId())
-                            .productDetailId(baseResponse.getProductDetailId())
-                            .title(baseResponse.getTitle())
-                            .colorLabel(baseResponse.getColorLabel())
-                            .sizeLabel(baseResponse.getSizeLabel())
-                            .quantity(baseResponse.getQuantity())
-                            .unitPrice(baseResponse.getUnitPrice())
-                            .finalPrice(applyRes.getFinalPrice())
-                            .percentOff(applyRes.getPercentOff())
-                            .promotionId(applyRes.getPromotionId())
-                            .promotionName(applyRes.getPromotionName())
-                            .totalPrice(baseResponse.getTotalPrice())
+                            .unitPrice(unitPrice)
+                            .finalPrice(finalPrice)
+                            .percentOff(percentOff)
+                            .promotionId(promotionId)
+                            .promotionName(promotionName)
+                            .totalPrice(totalPrice)
                             .build();
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private List<OrderResponse.PaymentResponse> mapPaymentsToResponse(Set<Payment> payments) {
@@ -329,7 +360,7 @@ public class OrderServiceImpl implements OrderService {
                         .paidAt(payment.getPaidAt())
                         .createdAt(payment.getCreatedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private List<OrderResponse.ShipmentResponse> mapShipmentsToResponse(
@@ -344,7 +375,7 @@ public class OrderServiceImpl implements OrderService {
                         .deliveredAt(shipment.getDeliveredAt())
                         .createdAt(shipment.getCreatedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
 

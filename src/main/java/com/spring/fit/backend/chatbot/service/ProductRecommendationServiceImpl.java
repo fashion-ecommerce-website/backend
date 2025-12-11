@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -22,142 +21,56 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
 
     private final VectorStore vectorStore;
     private final ProductDetailRepository productDetailRepository;
+    private final QueryIntentService queryIntentService;
 
     public ProductRecommendationServiceImpl(
             VectorStore vectorStore,
-            ProductDetailRepository productDetailRepository) {
+            ProductDetailRepository productDetailRepository,
+            QueryIntentService queryIntentService) {
         this.vectorStore = vectorStore;
         this.productDetailRepository = productDetailRepository;
+        this.queryIntentService = queryIntentService;
     }
 
     @Override
     public Set<Long> extractProductIdsFromQuery(String query) {
         try {
-            // Check if query is about outfit/styling
-            String queryLower = query.toLowerCase();
-            boolean isOutfitQuery = false;
-            for (String keyword : ChatbotConstants.OUTFIT_QUERY_KEYWORDS) {
-                if (queryLower.contains(keyword)) {
-                    isOutfitQuery = true;
-                    break;
-                }
-            }
-
-            Set<Long> productIds = new HashSet<>();
+            // Use GPT to understand query intent
+            boolean isOutfitQuery = queryIntentService.isOutfitQuery(query);
+            
+            Set<Long> productIds;
             
             if (isOutfitQuery) {
-                // For outfit queries, search for diverse categories
-                // Search with the original query to get general results
-                List<Document> documents = vectorStore.similaritySearch(query);
-                
-                // Also search for specific category types to ensure diversity
-                String[] categoryQueries = {
-                    query + " áo sơ mi polo hoodie",
-                    query + " quần jogger shorts",
-                    query + " túi tote đeo vai đeo chéo",
-                    query + " giày dép sneakers",
-                    query + " mũ nón phụ kiện"
-                };
+                // Generate diverse search queries based on context
+                List<String> searchQueries = queryIntentService.generateOutfitSearchQueries(query);
                 
                 // Collect all documents from multiple searches
-                Set<Document> allDocuments = new HashSet<>(documents);
-                for (String categoryQuery : categoryQueries) {
+                Set<Document> allDocuments = new HashSet<>();
+                for (String searchQuery : searchQueries) {
                     try {
-                        List<Document> categoryDocs = vectorStore.similaritySearch(categoryQuery);
-                        allDocuments.addAll(categoryDocs);
+                        List<Document> docs = vectorStore.similaritySearch(searchQuery);
+                        allDocuments.addAll(docs);
                     } catch (Exception e) {
-                        log.warn("Error searching for category query: {}", categoryQuery, e);
+                        log.warn("Error searching with query: {}", searchQuery, e);
                     }
                 }
                 
-                // Group products by category type to ensure diversity
-                Map<String, List<Long>> productsByCategory = new HashMap<>();
-                Map<Long, String> productCategoryMap = new HashMap<>();
+                // Extract productIds and group by category
+                Map<String, List<Long>> productsByCategory = groupProductsByCategory(allDocuments);
                 
-                for (Document doc : allDocuments) {
-                    Map<String, Object> metadata = doc.getMetadata();
-                    String type = (String) metadata.get(ChatbotConstants.METADATA_TYPE);
-                    
-                    if (ChatbotConstants.DOC_TYPE_PRODUCT.equals(type) || 
-                        ChatbotConstants.DOC_TYPE_PRODUCT_DETAIL.equals(type)) {
-                        String productIdStr = (String) metadata.get(ChatbotConstants.METADATA_PRODUCT_ID);
-                        if (productIdStr != null) {
-                            try {
-                                Long productId = Long.parseLong(productIdStr);
-                                String parentCategories = (String) metadata.get(ChatbotConstants.METADATA_PARENT_CATEGORIES);
-                                
-                                if (parentCategories != null && !parentCategories.isEmpty()) {
-                                    String[] parentCats = parentCategories.split(ChatbotConstants.DELIMITER_COMMA_SPACE);
-                                    for (String cat : parentCats) {
-                                        String catLower = cat.toLowerCase();
-                                        productsByCategory.computeIfAbsent(catLower, k -> new ArrayList<>()).add(productId);
-                                        productCategoryMap.put(productId, catLower);
-                                    }
-                                } else {
-                                    // If no parent category, use "other"
-                                    productsByCategory.computeIfAbsent("other", k -> new ArrayList<>()).add(productId);
-                                    productCategoryMap.put(productId, "other");
-                                }
-                            } catch (NumberFormatException e) {
-                                log.warn("Invalid productId in metadata: {}", productIdStr);
-                            }
-                        }
-                    }
-                }
+                // Filter products by season if mentioned in query
+                productsByCategory = filterProductsBySeason(productsByCategory, query, allDocuments);
                 
-                // Select products ensuring diversity: at least 1 from each major category
-                Set<String> targetCategories = new HashSet<>(Arrays.asList(
-                    "áo", "quần", "túi ví", "giày dép", "mũ nón"
-                ));
+                // Get target categories from query context
+                List<String> targetCategories = queryIntentService.extractTargetCategories(query);
                 
-                // First, get at least 1 product from each target category
-                for (String targetCat : targetCategories) {
-                    for (Map.Entry<String, List<Long>> entry : productsByCategory.entrySet()) {
-                        String category = entry.getKey();
-                        if (category.contains(targetCat) || targetCat.contains(category)) {
-                            List<Long> products = entry.getValue();
-                            if (!products.isEmpty()) {
-                                productIds.add(products.get(0));
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // Then, fill up to MAX_PRODUCTS_FOR_OUTFIT with diverse products
-                for (Map.Entry<String, List<Long>> entry : productsByCategory.entrySet()) {
-                    if (productIds.size() >= ChatbotConstants.MAX_PRODUCTS_FOR_OUTFIT) {
-                        break;
-                    }
-                    List<Long> products = entry.getValue();
-                    for (Long productId : products) {
-                        if (productIds.size() >= ChatbotConstants.MAX_PRODUCTS_FOR_OUTFIT) {
-                            break;
-                        }
-                        productIds.add(productId);
-                    }
-                }
+                // Select diverse products ensuring at least 1 from each target category
+                productIds = selectDiverseProducts(productsByCategory, targetCategories);
                 
             } else {
-                // For regular queries, just do normal search
+                // For regular queries, do simple similarity search
                 List<Document> documents = vectorStore.similaritySearch(query);
-                
-                for (Document doc : documents) {
-                    Map<String, Object> metadata = doc.getMetadata();
-                    String type = (String) metadata.get(ChatbotConstants.METADATA_TYPE);
-                    
-                    if (ChatbotConstants.DOC_TYPE_PRODUCT.equals(type) || 
-                        ChatbotConstants.DOC_TYPE_PRODUCT_DETAIL.equals(type)) {
-                        String productIdStr = (String) metadata.get(ChatbotConstants.METADATA_PRODUCT_ID);
-                        if (productIdStr != null) {
-                            try {
-                                productIds.add(Long.parseLong(productIdStr));
-                            } catch (NumberFormatException e) {
-                                log.warn("Invalid productId in metadata: {}", productIdStr);
-                            }
-                        }
-                    }
-                }
+                productIds = extractProductIdsFromDocuments(documents);
             }
             
             log.debug("Extracted {} product IDs from query: {} (outfit query: {})", 
@@ -170,6 +83,225 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         }
     }
 
+    /**
+     * Group products by category from documents
+     */
+    private Map<String, List<Long>> groupProductsByCategory(Set<Document> documents) {
+        Map<String, List<Long>> productsByCategory = new HashMap<>();
+        
+        for (Document doc : documents) {
+            Map<String, Object> metadata = doc.getMetadata();
+            String type = (String) metadata.get(ChatbotConstants.METADATA_TYPE);
+            
+            if (ChatbotConstants.DOC_TYPE_PRODUCT.equals(type) || 
+                ChatbotConstants.DOC_TYPE_PRODUCT_DETAIL.equals(type)) {
+                String productIdStr = (String) metadata.get(ChatbotConstants.METADATA_PRODUCT_ID);
+                if (productIdStr != null) {
+                    try {
+                        Long productId = Long.parseLong(productIdStr);
+                        String parentCategories = (String) metadata.get(ChatbotConstants.METADATA_PARENT_CATEGORIES);
+                        
+                        if (parentCategories != null && !parentCategories.isEmpty()) {
+                            String[] parentCats = parentCategories.split(ChatbotConstants.DELIMITER_COMMA_SPACE);
+                            for (String cat : parentCats) {
+                                String catLower = cat.toLowerCase().trim();
+                                productsByCategory.computeIfAbsent(catLower, k -> new ArrayList<>()).add(productId);
+                            }
+                        } else {
+                            productsByCategory.computeIfAbsent("other", k -> new ArrayList<>()).add(productId);
+                        }
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid productId in metadata: {}", productIdStr);
+                    }
+                }
+            }
+        }
+        
+        return productsByCategory;
+    }
+
+    /**
+     * Select diverse products ensuring at least 1 from each target category
+     */
+    private Set<Long> selectDiverseProducts(Map<String, List<Long>> productsByCategory, List<String> targetCategories) {
+        Set<Long> selectedProductIds = new HashSet<>();
+        Set<String> usedCategories = new HashSet<>();
+        
+        // First pass: get at least 1 product from each target category
+        for (String targetCat : targetCategories) {
+            String targetCatLower = targetCat.toLowerCase();
+            for (Map.Entry<String, List<Long>> entry : productsByCategory.entrySet()) {
+                String category = entry.getKey();
+                if (category.contains(targetCatLower) || targetCatLower.contains(category)) {
+                    List<Long> products = entry.getValue();
+                    if (!products.isEmpty() && !usedCategories.contains(category)) {
+                        selectedProductIds.add(products.get(0));
+                        usedCategories.add(category);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Second pass: fill remaining slots with diverse products
+        for (Map.Entry<String, List<Long>> entry : productsByCategory.entrySet()) {
+            if (selectedProductIds.size() >= ChatbotConstants.MAX_PRODUCTS_FOR_OUTFIT) {
+                break;
+            }
+            if (!usedCategories.contains(entry.getKey())) {
+                List<Long> products = entry.getValue();
+                if (!products.isEmpty()) {
+                    selectedProductIds.add(products.get(0));
+                    usedCategories.add(entry.getKey());
+                }
+            }
+        }
+        
+        // Third pass: add remaining products if space available
+        for (List<Long> products : productsByCategory.values()) {
+            if (selectedProductIds.size() >= ChatbotConstants.MAX_PRODUCTS_FOR_OUTFIT) {
+                break;
+            }
+            for (Long productId : products) {
+                if (selectedProductIds.size() >= ChatbotConstants.MAX_PRODUCTS_FOR_OUTFIT) {
+                    break;
+                }
+                selectedProductIds.add(productId);
+            }
+        }
+        
+        return selectedProductIds;
+    }
+
+    /**
+     * Filter products by season based on query and product titles
+     */
+    private Map<String, List<Long>> filterProductsBySeason(
+            Map<String, List<Long>> productsByCategory, 
+            String query, 
+            Set<Document> allDocuments) {
+        
+        // Create a map of productId -> product title from documents
+        Map<Long, String> productTitleMap = new HashMap<>();
+        for (Document doc : allDocuments) {
+            Map<String, Object> metadata = doc.getMetadata();
+            String type = (String) metadata.get(ChatbotConstants.METADATA_TYPE);
+            
+            if (ChatbotConstants.DOC_TYPE_PRODUCT.equals(type) || 
+                ChatbotConstants.DOC_TYPE_PRODUCT_DETAIL.equals(type)) {
+                String productIdStr = (String) metadata.get(ChatbotConstants.METADATA_PRODUCT_ID);
+                String title = (String) metadata.get(ChatbotConstants.METADATA_TITLE);
+                
+                if (productIdStr != null && title != null) {
+                    try {
+                        Long productId = Long.parseLong(productIdStr);
+                        productTitleMap.put(productId, title.toLowerCase());
+                    } catch (NumberFormatException e) {
+                        // Skip invalid productId
+                    }
+                }
+            }
+        }
+        
+        // Detect season from query
+        String queryLower = query.toLowerCase();
+        boolean isSummer = queryLower.contains("mùa hè") || queryLower.contains("mùa nóng") || 
+                          queryLower.contains("mùa hạ") || queryLower.contains("hè");
+        boolean isWinter = queryLower.contains("mùa đông") || queryLower.contains("mùa lạnh") || 
+                          queryLower.contains("đông");
+        
+        // If no season mentioned, return original map
+        if (!isSummer && !isWinter) {
+            return productsByCategory;
+        }
+        
+        // Filter products by season
+        Map<String, List<Long>> filteredProductsByCategory = new HashMap<>();
+        
+        for (Map.Entry<String, List<Long>> entry : productsByCategory.entrySet()) {
+            String category = entry.getKey();
+            List<Long> productIds = entry.getValue();
+            List<Long> filteredProductIds = new ArrayList<>();
+            
+            for (Long productId : productIds) {
+                String title = productTitleMap.get(productId);
+                if (title == null) {
+                    // If title not found, keep the product (better to include than exclude)
+                    filteredProductIds.add(productId);
+                    continue;
+                }
+                
+                boolean matchesSeason = false;
+                
+                if (isSummer) {
+                    // Summer keywords: ngắn tay, áo thun, quần short, mỏng, nhẹ
+                    matchesSeason = title.contains("ngắn tay") || 
+                                   title.contains("áo thun") || 
+                                   title.contains("quần short") ||
+                                   title.contains("short") ||
+                                   (!title.contains("dài tay") && 
+                                    !title.contains("sweatshirt") && 
+                                    !title.contains("hoodie") &&
+                                    !title.contains("áo len"));
+                } else if (isWinter) {
+                    // Winter keywords: dài tay, sweatshirt, hoodie, áo len, dày, ấm
+                    matchesSeason = title.contains("dài tay") || 
+                                   title.contains("sweatshirt") || 
+                                   title.contains("hoodie") ||
+                                   title.contains("áo len") ||
+                                   (!title.contains("ngắn tay") && 
+                                    !title.contains("quần short"));
+                }
+                
+                if (matchesSeason) {
+                    filteredProductIds.add(productId);
+                }
+            }
+            
+            if (!filteredProductIds.isEmpty()) {
+                filteredProductsByCategory.put(category, filteredProductIds);
+            }
+        }
+        
+        // If filtering removed all products, return original (better to show something than nothing)
+        if (filteredProductsByCategory.isEmpty()) {
+            log.warn("Season filtering removed all products, returning original results");
+            return productsByCategory;
+        }
+        
+        log.debug("Filtered products by season: {} -> {} products", 
+                productsByCategory.values().stream().mapToInt(List::size).sum(),
+                filteredProductsByCategory.values().stream().mapToInt(List::size).sum());
+        
+        return filteredProductsByCategory;
+    }
+
+    /**
+     * Extract product IDs from documents
+     */
+    private Set<Long> extractProductIdsFromDocuments(List<Document> documents) {
+        Set<Long> productIds = new HashSet<>();
+        
+        for (Document doc : documents) {
+            Map<String, Object> metadata = doc.getMetadata();
+            String type = (String) metadata.get(ChatbotConstants.METADATA_TYPE);
+            
+            if (ChatbotConstants.DOC_TYPE_PRODUCT.equals(type) || 
+                ChatbotConstants.DOC_TYPE_PRODUCT_DETAIL.equals(type)) {
+                String productIdStr = (String) metadata.get(ChatbotConstants.METADATA_PRODUCT_ID);
+                if (productIdStr != null) {
+                    try {
+                        productIds.add(Long.parseLong(productIdStr));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid productId in metadata: {}", productIdStr);
+                    }
+                }
+            }
+        }
+        
+        return productIds;
+    }
+
     @Override
     public List<ChatbotResponse.ProductRecommendation> getProductRecommendations(Set<Long> productIds) {
         if (productIds == null || productIds.isEmpty()) {
@@ -177,167 +309,55 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         }
 
         try {
-            // Get ProductDetails with their category information
-            Map<Long, ProductDetail> productDetailMap = new HashMap<>();
-            Map<Long, String> productCategoryMap = new HashMap<>();
+            List<ChatbotResponse.ProductRecommendation> recommendations = new ArrayList<>();
             
+            // Duyệt từng productId
             for (Long productId : productIds) {
+                // Tìm list ProductDetail tương ứng (đã có JOIN FETCH product, color, size)
                 List<ProductDetail> details = productDetailRepository.findActiveDetailsByProductIdWithProduct(productId);
-                if (!details.isEmpty()) {
-                    ProductDetail detail = details.get(0);
-                    productDetailMap.put(productId, detail);
-                    
-                    // Extract category information
-                    if (detail.getProduct() != null && detail.getProduct().getCategories() != null) {
-                        String parentCategories = detail.getProduct().getCategories().stream()
-                                .filter(cat -> cat.getIsActive() != null && cat.getIsActive())
-                                .filter(cat -> cat.getParent() != null)
-                                .map(cat -> cat.getParent().getName().toLowerCase())
-                                .distinct()
-                                .collect(Collectors.joining(ChatbotConstants.DELIMITER_COMMA_SPACE));
-                        if (!parentCategories.isEmpty()) {
-                            productCategoryMap.put(productId, parentCategories);
-                        }
-                    }
-                }
-            }
-
-            // Group products by category to ensure diversity
-            Map<String, List<ProductDetail>> detailsByCategory = new HashMap<>();
-            List<ProductDetail> uncategorized = new ArrayList<>();
-            
-            for (Map.Entry<Long, ProductDetail> entry : productDetailMap.entrySet()) {
-                Long productId = entry.getKey();
-                ProductDetail detail = entry.getValue();
-                String categories = productCategoryMap.get(productId);
                 
-                if (categories != null && !categories.isEmpty()) {
-                    String[] categoryArray = categories.split(ChatbotConstants.DELIMITER_COMMA_SPACE);
-                    boolean categorized = false;
-                    for (String cat : categoryArray) {
-                        String catLower = cat.toLowerCase();
-                        // Map to major categories
-                        String majorCategory = mapToMajorCategory(catLower);
-                        detailsByCategory.computeIfAbsent(majorCategory, k -> new ArrayList<>()).add(detail);
-                        categorized = true;
-                    }
-                    if (!categorized) {
-                        uncategorized.add(detail);
-                    }
-                } else {
-                    uncategorized.add(detail);
+                if (!details.isEmpty()) {
+                    // Lấy item đầu tiên
+                    ProductDetail firstDetail = details.get(0);
+                    
+                    // Build ProductRecommendation
+                    ChatbotResponse.ProductRecommendation recommendation = buildProductRecommendation(firstDetail);
+                    recommendations.add(recommendation);
                 }
             }
             
-            // Build final list ensuring diversity
-            List<ProductDetail> finalDetails = new ArrayList<>();
-            Set<String> usedCategories = new HashSet<>();
-            
-            // First pass: get at least 1 from each major category
-            String[] majorCategories = {"áo", "quần", "túi ví", "giày dép", "mũ nón"};
-            for (String majorCat : majorCategories) {
-                for (Map.Entry<String, List<ProductDetail>> entry : detailsByCategory.entrySet()) {
-                    if (entry.getKey().contains(majorCat) || majorCat.contains(entry.getKey())) {
-                        List<ProductDetail> details = entry.getValue();
-                        if (!details.isEmpty() && !usedCategories.contains(entry.getKey())) {
-                            finalDetails.add(details.get(0));
-                            usedCategories.add(entry.getKey());
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // Second pass: fill remaining slots with diverse products
-            for (Map.Entry<String, List<ProductDetail>> entry : detailsByCategory.entrySet()) {
-                if (finalDetails.size() >= ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT) {
-                    break;
-                }
-                if (!usedCategories.contains(entry.getKey())) {
-                    List<ProductDetail> details = entry.getValue();
-                    if (!details.isEmpty()) {
-                        finalDetails.add(details.get(0));
-                        usedCategories.add(entry.getKey());
-                    }
-                }
-            }
-            
-            // Third pass: add remaining products if we still have space
-            for (ProductDetail detail : productDetailMap.values()) {
-                if (finalDetails.size() >= ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT) {
-                    break;
-                }
-                if (!finalDetails.contains(detail)) {
-                    finalDetails.add(detail);
-                }
-            }
-            
-            // Add uncategorized products
-            for (ProductDetail detail : uncategorized) {
-                if (finalDetails.size() >= ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT) {
-                    break;
-                }
-                if (!finalDetails.contains(detail)) {
-                    finalDetails.add(detail);
-                }
-            }
-            
-            // Limit to max recommendations
-            finalDetails = finalDetails.stream()
-                    .limit(ChatbotConstants.RECOMMENDATION_LIMIT_OUTFIT)
-                    .collect(Collectors.toList());
-
-            // Map to recommendations
-            return finalDetails.stream()
-                    .map(this::mapToRecommendation)
-                    .collect(Collectors.toList());
+            return recommendations;
 
         } catch (Exception e) {
             log.error("Error getting product recommendations", e);
             return Collections.emptyList();
         }
     }
-    
-    /**
-     * Map category name to major category for grouping
-     */
-    private String mapToMajorCategory(String category) {
-        String catLower = category.toLowerCase();
-        if (catLower.contains("áo") || catLower.contains("ao")) {
-            return "áo";
-        } else if (catLower.contains("quần") || catLower.contains("quan")) {
-            return "quần";
-        } else if (catLower.contains("túi") || catLower.contains("tui") || catLower.contains("ví") || catLower.contains("vi")) {
-            return "túi ví";
-        } else if (catLower.contains("giày") || catLower.contains("giay") || catLower.contains("dép") || catLower.contains("dep")) {
-            return "giày dép";
-        } else if (catLower.contains("mũ") || catLower.contains("mu") || catLower.contains("nón") || catLower.contains("non")) {
-            return "mũ nón";
-        }
-        return category;
-    }
 
-    private ChatbotResponse.ProductRecommendation mapToRecommendation(ProductDetail detail) {
+    /**
+     * Build ProductRecommendation từ ProductDetail
+     */
+    private ChatbotResponse.ProductRecommendation buildProductRecommendation(ProductDetail detail) {
         ChatbotResponse.ProductRecommendation recommendation = new ChatbotResponse.ProductRecommendation();
         
         // objectId = productDetailId
         recommendation.setObjectId(detail.getId());
         
-        // title = slug của productDetail (sẽ được thay thế bởi GPT response nếu có)
-        recommendation.setTitle(detail.getSlug());
+        // title = title của ProductEntity
+        if (detail.getProduct() != null && detail.getProduct().getTitle() != null) {
+            recommendation.setTitle(detail.getProduct().getTitle());
+        } else {
+            recommendation.setTitle("");
+        }
         
-        // description = description của product
-        if (detail.getProduct() != null) {
-            recommendation.setDescription(
-                    detail.getProduct().getDescription() != null 
-                            ? detail.getProduct().getDescription() 
-                            : ""
-            );
+        // description = description của ProductEntity
+        if (detail.getProduct() != null && detail.getProduct().getDescription() != null) {
+            recommendation.setDescription(detail.getProduct().getDescription());
         } else {
             recommendation.setDescription("");
         }
         
-        // imageUrl = first image của productDetail (using native query)
+        // imageUrl = từ ProductDetail (native query để lấy imageUrl đầu tiên)
         String imageUrl = "";
         try {
             Optional<String> imageUrlOpt = productDetailRepository.findFirstImageUrlByDetailId(detail.getId());
@@ -349,24 +369,24 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         }
         recommendation.setImageUrl(imageUrl);
         
-        // color = tên màu từ database
-        if (detail.getColor() != null) {
+        // color = name của Color từ database (đã có trong JOIN FETCH)
+        if (detail.getColor() != null && detail.getColor().getName() != null) {
             recommendation.setColor(detail.getColor().getName());
         } else {
             recommendation.setColor("");
         }
         
-        // size = label của size từ database
-        if (detail.getSize() != null) {
+        // size = label của Size từ database (đã có trong JOIN FETCH)
+        if (detail.getSize() != null && detail.getSize().getLabel() != null) {
             recommendation.setSize(detail.getSize().getLabel());
         } else {
             recommendation.setSize("");
         }
         
-        // price = giá từ database
+        // price = từ ProductDetail
         recommendation.setPrice(detail.getPrice());
         
-        // quantity = số lượng từ database
+        // quantity = từ ProductDetail
         recommendation.setQuantity(detail.getQuantity());
         
         return recommendation;

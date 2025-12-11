@@ -40,7 +40,7 @@ public interface PromotionService {
 
     long removeTargets(Long promotionId, PromotionTargetsRemoveRequest request);
 
-    PromotionApplyResponse applyBestPromotionForSku(PromotionApplyRequest request);
+    PromotionApplyResponse applyPromotionForSku(PromotionApplyRequest request);
 }
 
 

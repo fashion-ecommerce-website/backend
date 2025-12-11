@@ -117,7 +117,7 @@ public class ProductServiceImpl implements ProductService {
                                 .skuId(card.getDetailId())
                                 .basePrice(card.getPrice())
                                 .build();
-                        applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                        applyRes = promotionService.applyPromotionForSku(applyReq);
                     } catch (Exception ex) {
                         // fallback giữ nguyên giá nếu có lỗi
                         applyRes = PromotionApplyResponse.builder()
@@ -215,7 +215,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             log.warn("Error applying promotion for detailId {}: {}", card.getDetailId(), ex.getMessage());
@@ -396,7 +396,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             applyRes = PromotionApplyResponse.builder()
@@ -454,7 +454,7 @@ public class ProductServiceImpl implements ProductService {
                                     .skuId(card.getDetailId())
                                     .basePrice(card.getPrice())
                                     .build();
-                            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
                         } catch (Exception ex) {
                             // fallback giữ nguyên giá nếu có lỗi
                             applyRes = PromotionApplyResponse.builder()
@@ -594,7 +594,7 @@ public class ProductServiceImpl implements ProductService {
                     .skuId(base.getDetailId())
                     .basePrice(base.getPrice())
                     .build();
-            applyRes = promotionService.applyBestPromotionForSku(applyReq);
+            applyRes = promotionService.applyPromotionForSku(applyReq);
         } catch (Exception ex) {
             applyRes = PromotionApplyResponse.builder()
                     .basePrice(base.getPrice())
@@ -1180,6 +1180,7 @@ public class ProductServiceImpl implements ProductService {
 
             // 9. Build response
             ProductDetailByColorAndSizeResponse response = new ProductDetailByColorAndSizeResponse();
+            response.setDetailId(productDetail.getId());
             response.setProductId(request.getProductId());
             response.setTitle(product.getTitle());
             response.setImages(images);
@@ -1419,9 +1420,12 @@ public class ProductServiceImpl implements ProductService {
             response.setCategoryId(product.getCategories().iterator().next().getId());
         }
 
-        // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì)
+        // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì) và detail ID tương ứng
         String thumbnail = getThumbnailForProduct(product.getId());
         response.setThumbnail(thumbnail);
+        
+        Long currentDetailId = productRepository.findFirstDetailIdByProductId(product.getId());
+        response.setCurrentDetailId(currentDetailId);
 
         // Lấy danh sách màu active và inactive
         List<ColorResponse> variantColors = new ArrayList<>();
@@ -1487,4 +1491,133 @@ public class ProductServiceImpl implements ProductService {
     // Records cho better type safety và immutability
     private record SortParams(String field, String direction) {}
     private record FilterParams(String title, List<String> colors, List<String> sizes, boolean colorsEmpty, boolean sizesEmpty) {}
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductSimpleResponse> getAllProductsSimple() {
+        log.info("Getting all products simple");
+        List<Product> products = productMainRepository.findAll();
+        return products.stream()
+                .map(p -> ProductSimpleResponse.builder()
+                        .id(p.getId())
+                        .name(p.getTitle())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductDetailSimpleResponse> getAllProductDetailsSimple() {
+        log.info("Getting all product details simple");
+        List<ProductDetail> details = productDetailRepository.findAll();
+        return details.stream()
+                .map(d -> {
+                    String name = d.getProduct().getTitle() + " - " + 
+                                  d.getColor().getName() + " - " + 
+                                  d.getSize().getLabel();
+                    return ProductDetailSimpleResponse.builder()
+                            .id(d.getId())
+                            .name(name)
+                            .build();
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NewArrivalsResponse> getNewArrivalsByRootCategories(String categorySlug, int limit) {
+        log.info("Inside ProductServiceImpl.getNewArrivalsByRootCategories categorySlug={}, limit={}", categorySlug, limit);
+        
+        try {
+            List<Category> rootCategories;
+            
+            if (StringUtils.hasText(categorySlug)) {
+                Category category = categoryRepository.findBySlug(categorySlug)
+                        .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
+                                "Category not found with slug: " + categorySlug));
+                
+                if (!category.getIsActive()) {
+                    throw new ErrorException(HttpStatus.NOT_FOUND, "Category is not active: " + categorySlug);
+                }
+                
+                rootCategories = List.of(category);
+            } else {
+                rootCategories = categoryRepository.findByParentIsNull();
+            }
+            
+            if (rootCategories.isEmpty()) {
+                log.warn("No root categories found");
+                return List.of();
+            }
+            
+            log.debug("Found {} root categories", rootCategories.size());
+            
+            List<NewArrivalsResponse> results = new ArrayList<>();
+            
+            for (Category rootCategory : rootCategories) {
+                if (!rootCategory.getIsActive()) {
+                    continue;
+                }
+                
+                List<ProductCardView> products = productRepository.findNewArrivalsByRootCategory(
+                        rootCategory.getId(), limit);
+
+                List<ProductCardWithPromotionResponse> productsWithPromotion = products.stream()
+                        .map(card -> {
+                            var applyRes = PromotionApplyResponse.builder().build();
+                            try {
+                                var applyReq = PromotionApplyRequest.builder()
+                                        .skuId(card.getDetailId())
+                                        .basePrice(card.getPrice())
+                                        .build();
+                                applyRes = promotionService.applyPromotionForSku(applyReq);
+                            } catch (Exception ex) {
+                                log.debug("Error applying promotion for detailId {}: {}", 
+                                        card.getDetailId(), ex.getMessage());
+                                applyRes = PromotionApplyResponse.builder()
+                                        .basePrice(card.getPrice())
+                                        .finalPrice(card.getPrice())
+                                        .percentOff(0)
+                                        .build();
+                            }
+                            return ProductCardWithPromotionResponse.builder()
+                                    .productId(card.getProductId())
+                                    .detailId(card.getDetailId())
+                                    .productTitle(card.getProductTitle())
+                                    .productSlug(card.getProductSlug())
+                                    .colorName(card.getColorName())
+                                    .price(card.getPrice())
+                                    .finalPrice(applyRes.getFinalPrice())
+                                    .percentOff(applyRes.getPercentOff())
+                                    .promotionId(applyRes.getPromotionId())
+                                    .promotionName(applyRes.getPromotionName())
+                                    .quantity(card.getQuantity())
+                                    .colors(card.getColors())
+                                    .imageUrls(card.getImageUrls())
+                                    .build();
+                        })
+                        .collect(Collectors.toList());
+                
+                NewArrivalsResponse categoryResponse = NewArrivalsResponse.builder()
+                        .categoryId(rootCategory.getId())
+                        .categoryName(rootCategory.getName())
+                        .categorySlug(rootCategory.getSlug())
+                        .products(productsWithPromotion)
+                        .build();
+                
+                results.add(categoryResponse);
+                
+                log.debug("Category '{}' has {} new arrival products", 
+                        rootCategory.getName(), productsWithPromotion.size());
+            }
+            
+            log.info("Inside ProductServiceImpl.getNewArrivalsByRootCategories success totalCategories={}", 
+                    results.size());
+            return results;
+            
+        } catch (Exception e) {
+            log.error("Error getting new arrivals by root categories: {}", e.getMessage(), e);
+            throw new RuntimeException("Error when getting new arrivals by root categories", e);
+        }
+    }
 }

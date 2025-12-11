@@ -11,7 +11,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import com.spring.fit.backend.common.enums.OrderStatus;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Entity
 @Table(name = "shipments", indexes = {
@@ -54,6 +56,10 @@ public class Shipment {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private Set<TrackingEvent> trackingEvents = new LinkedHashSet<>();
 
     @Override
     public boolean equals(Object o) {

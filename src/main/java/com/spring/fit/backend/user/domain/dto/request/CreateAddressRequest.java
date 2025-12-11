@@ -24,10 +24,17 @@ public class CreateAddressRequest {
 
     private String ward;
 
+    // GHN ward code (mã phường/xã theo GHN API)
+    private String wardCode;
+
     @NotBlank(message = "City is required")
     private String city;
 
-    private String province;
+    private Integer provinceId;
+
+    private String districtName;
+
+    private Integer districtId;
 
     private String countryCode;
 

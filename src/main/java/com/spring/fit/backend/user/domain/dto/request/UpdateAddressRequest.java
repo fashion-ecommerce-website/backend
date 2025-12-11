@@ -20,9 +20,15 @@ public class UpdateAddressRequest {
 
     private String ward;
 
+    private String wardCode;
+
     private String city;
 
-    private String province;
+    private Integer provinceId;
+
+    private String districtName;
+
+    private Integer districtId;
 
     private String countryCode;
 

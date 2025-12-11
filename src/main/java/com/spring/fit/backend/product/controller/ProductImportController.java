@@ -1,6 +1,7 @@
 package com.spring.fit.backend.product.controller;
 
-import com.spring.fit.backend.product.domain.dto.response.ProductDetailPreviewResponse;
+import com.spring.fit.backend.product.domain.dto.request.ProductDetailCheckRequest;
+import com.spring.fit.backend.product.domain.dto.response.ProductDetailCheckResponse;
 import com.spring.fit.backend.product.domain.dto.response.ProductGroupResponse;
 import com.spring.fit.backend.product.service.ProductImportService;
 import lombok.RequiredArgsConstructor;
@@ -17,23 +18,32 @@ public class ProductImportController {
 
     private final ProductImportService productImportService;
 
-    @PostMapping("/preview")
-    public ResponseEntity<List<ProductGroupResponse>> importPreview(@RequestParam("file") MultipartFile file) {
-        List<ProductGroupResponse> result = productImportService.parseCsv(file);
-        return ResponseEntity.ok(result);
+    @PostMapping("/zip-preview")
+    public ResponseEntity<List<ProductGroupResponse>> importProductsWithZips(
+            @RequestParam("csv") MultipartFile csv,
+            @RequestParam("zips") List<MultipartFile> zips) {
+
+        List<ProductGroupResponse> preview = productImportService.parseCsvWithZips(csv, zips);
+        return ResponseEntity.ok(preview);
     }
 
-    // --- Lưu tất cả product từ CSV ---
-    @PostMapping("/save")
-    public ResponseEntity<String> saveAllProducts(@RequestBody List<ProductGroupResponse> groups) {
+    @PostMapping("/zip-save")
+    public ResponseEntity<Void> saveImportedZip(
+            @RequestBody List<ProductGroupResponse> groups) {
 
         if (groups == null || groups.isEmpty()) {
-            return ResponseEntity.badRequest().body(" No product data provided");
+            return ResponseEntity.badRequest().build();
         }
 
-        // Gọi service để lưu tất cả
         productImportService.saveAllImportedProducts(groups);
+        return ResponseEntity.ok().build();
+    }
 
-        return ResponseEntity.ok("✅ Saved " + groups.size() + " products successfully!");
+    @PostMapping("/check-detail")
+    public ResponseEntity<ProductDetailCheckResponse> checkProductDetail(
+            @RequestBody ProductDetailCheckRequest request
+    ) {
+        ProductDetailCheckResponse response = productImportService.checkProductDetail(request);
+        return ResponseEntity.ok(response);
     }
 }

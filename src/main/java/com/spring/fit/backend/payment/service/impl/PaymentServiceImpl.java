@@ -8,6 +8,7 @@ import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.order.repository.OrderRepository;
+import com.spring.fit.backend.order.service.ShipmentService;
 import com.spring.fit.backend.payment.config.StripeProperties;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResponse;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CreateCheckoutRequest;
@@ -56,6 +57,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PromotionService promotionService;
     private final OrderEmailService orderEmailService;
     private final StripeHelper stripeHelper;
+    private final ShipmentService shipmentService;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -151,7 +153,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .skuId(detailId)
                 .basePrice(unitPrice)
                 .build();
-                PromotionApplyResponse applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                PromotionApplyResponse applyRes = promotionService.applyPromotionForSku(applyReq);
         
                 // Create price data for the line item
                 SessionCreateParams.LineItem.PriceData priceData = SessionCreateParams.LineItem.PriceData.builder()
@@ -360,6 +362,15 @@ public class PaymentServiceImpl implements PaymentService {
             }
             
             orderRepository.save(order);
+            
+            // 4: Create shipment with tracking after payment success
+            try {
+                shipmentService.createShipmentForOrder(order, null); // null = use default carrier
+                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Shipment created for order: {}", orderId);
+            } catch (Exception e) {
+                log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create shipment for order {}: {}", orderId, e.getMessage());
+                // Don't fail payment if shipment creation fails - can retry later
+            }
             
             // Send order confirmation email to user (non-blocking)
             orderEmailService.sendOrderDetailsEmail(order);

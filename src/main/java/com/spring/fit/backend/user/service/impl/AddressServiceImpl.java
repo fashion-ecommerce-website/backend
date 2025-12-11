@@ -50,7 +50,11 @@ public class AddressServiceImpl implements AddressService {
                 .phone(request.getPhone())
                 .line(request.getLine())
                 .ward(request.getWard())
+                .wardCode(request.getWardCode())
                 .city(request.getCity())
+                .provinceId(request.getProvinceId())
+                .districtName(request.getDistrictName())
+                .districtId(request.getDistrictId())
                 .countryCode(request.getCountryCode() != null ? request.getCountryCode() : "VN")
                 .isDefault(request.isDefault())
                 .build();
@@ -75,7 +79,7 @@ public class AddressServiceImpl implements AddressService {
         List<AddressEntity> addresses = addressRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         List<AddressResponse> responses = addresses.stream()
                 .map(AddressResponse::fromEntity)
-                .collect(Collectors.toList());
+                .toList();
 
         log.info("Inside AddressServiceImpl.getUserAddresses success userEmail={}, count={}", userEmail, responses.size());
         return responses;
@@ -118,8 +122,20 @@ public class AddressServiceImpl implements AddressService {
         if (request.getWard() != null) {
             address.setWard(request.getWard());
         }
+        if (request.getWardCode() != null) {
+            address.setWardCode(request.getWardCode());
+        }
         if (request.getCity() != null) {
             address.setCity(request.getCity());
+        }
+        if (request.getProvinceId() != null) {
+            address.setProvinceId(request.getProvinceId());
+        }
+        if (request.getDistrictName() != null) {
+            address.setDistrictName(request.getDistrictName());
+        }
+        if (request.getDistrictId() != null) {
+            address.setDistrictId(request.getDistrictId());
         }
         if (request.getCountryCode() != null) {
             address.setCountryCode(request.getCountryCode());

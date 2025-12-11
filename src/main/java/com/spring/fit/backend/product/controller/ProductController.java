@@ -30,7 +30,7 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<PageResult<ProductCardWithPromotionResponse>> getProductsByCategory(
-            @RequestParam
+            @RequestParam(required = false)
             @Size(max = 100, message = "Category cannot exceed 100 characters")
             String category,
 
@@ -51,7 +51,7 @@ public class ProductController {
             String priceBucket,
 
             @RequestParam(required = false, name="sort")
-            @Pattern(regexp = "^(price|productTitle|name)_(asc|desc)$", message = "Invalid sort format")
+            @Pattern(regexp = "^(price|productTitle|name|createdAt)_(asc|desc)$", message = "Invalid sort format")
             String sortBy,
 
             @RequestParam(defaultValue = "0")
@@ -72,6 +72,32 @@ public class ProductController {
             
         } catch (Exception e) {
             log.error("Inside ProductController.getProductsByCategory error category={}, error={}", category, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/new-arrivals")
+    public ResponseEntity<List<NewArrivalsResponse>> getNewArrivalsByRootCategories(
+            @RequestParam(required = false)
+            @Size(max = 100, message = "Category slug cannot exceed 100 characters")
+            String category,
+
+            @RequestParam(defaultValue = "8")
+            @Min(value = 1, message = "Limit must be >= 1")
+            @Max(value = 50, message = "Limit cannot exceed 50")
+            int limit) {
+        log.info("Inside ProductController.getNewArrivalsByRootCategories category={}, limit={}", category, limit);
+        
+        try {
+            List<NewArrivalsResponse> result = productService.getNewArrivalsByRootCategories(category, limit);
+            
+            log.info("Inside ProductController.getNewArrivalsByRootCategories success totalCategories={}", 
+                    result.size());
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Inside ProductController.getNewArrivalsByRootCategories error category={}, limit={}, error={}", 
+                    category, limit, e.getMessage(), e);
             throw e;
         }
     }
@@ -417,6 +443,32 @@ public class ProductController {
 
         } catch (Exception e) {
             log.error("Inside ProductController.deleteProductDetail error detailId={}, error={}", id, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<ProductSimpleResponse>> getAllProductsSimple() {
+        log.info("Inside ProductController.getAllProductsSimple");
+        try {
+            List<ProductSimpleResponse> result = productService.getAllProductsSimple();
+            log.info("Inside ProductController.getAllProductsSimple success count={}", result.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Inside ProductController.getAllProductsSimple error={}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/admin/details/all")
+    public ResponseEntity<List<ProductDetailSimpleResponse>> getAllProductDetailsSimple() {
+        log.info("Inside ProductController.getAllProductDetailsSimple");
+        try {
+            List<ProductDetailSimpleResponse> result = productService.getAllProductDetailsSimple();
+            log.info("Inside ProductController.getAllProductDetailsSimple success count={}", result.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Inside ProductController.getAllProductDetailsSimple error={}", e.getMessage(), e);
             throw e;
         }
     }
