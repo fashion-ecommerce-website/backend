@@ -118,4 +118,32 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // Sum total revenue by date
         @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate", nativeQuery = true)
         BigDecimal sumTotalRevenueByDate(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate);
+
+        /**
+         * Find order history with shipment status for size recommendation.
+         * Returns individual orders with userId for similarity-weighted calculation.
+         * 
+         * Returns: userId, sizeLabel, shipmentStatus, orderStatus, rating, purchaseDate
+         */
+        @Query("""
+            SELECT 
+                o.user.id AS userId,
+                od.sizeLabel AS sizeLabel,
+                COALESCE(s.status, 'PENDING') AS shipmentStatus,
+                o.status AS orderStatus,
+                COALESCE(r.rating, 0) AS rating,
+                o.createdAt AS purchaseDate
+            FROM Order o
+            JOIN o.orderDetails od
+            JOIN od.productDetail pd
+            LEFT JOIN o.shipments s
+            LEFT JOIN Review r ON r.user.id = o.user.id AND r.productDetail.id = pd.id
+            WHERE o.user.id IN :userIds
+              AND pd.product.id = :productId
+            ORDER BY o.createdAt DESC
+            """)
+        List<Object[]> findOrderHistoryWithShipmentStatus(
+            @Param("userIds") List<Long> userIds,
+            @Param("productId") Long productId
+        );
 }
