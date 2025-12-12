@@ -68,6 +68,7 @@ public class OrderResponse {
         private Long promotionId;            // nullable
         private String promotionName;        // nullable
         private BigDecimal totalPrice;
+        private List<String> images;         // list of image URLs for product detail
     }
 
     @Data

@@ -369,7 +369,6 @@ public class PaymentServiceImpl implements PaymentService {
                 log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Shipment created for order: {}", orderId);
             } catch (Exception e) {
                 log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create shipment for order {}: {}", orderId, e.getMessage());
-                // Don't fail payment if shipment creation fails - can retry later
             }
             
             // Send order confirmation email to user (non-blocking)

@@ -13,6 +13,7 @@ import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.order.service.OrderService;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
+import com.spring.fit.backend.product.repository.ProductImageRepository;
 import com.spring.fit.backend.promotion.domain.entity.OrderDetailPromotion;
 import com.spring.fit.backend.promotion.repository.OrderDetailPromotionRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
@@ -46,6 +47,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final ProductDetailRepository productDetailRepository;
+    private final ProductImageRepository productImageRepository;
     private final VoucherRepository voucherRepository;
     private final OrderDetailPromotionRepository orderDetailPromotionRepository;
 
@@ -287,6 +289,30 @@ public class OrderServiceImpl implements OrderService {
                         (existing, replacement) -> existing // If duplicate, keep first
                 ));
 
+        // Collect all productDetailIds
+        List<Long> productDetailIds = orderDetails.stream()
+                .map(detail -> detail.getProductDetail().getId())
+                .distinct()
+                .toList();
+
+        // Load all images for these productDetailIds in one query
+        // Group by detailId to get list of images for each detailId
+        Map<Long, List<String>> imagesMap = Map.of(); // Initialize empty map
+        if (!productDetailIds.isEmpty()) {
+            List<Object[]> imageResults = productImageRepository.findAllImageUrlsByDetailIds(productDetailIds);
+            // Group by detailId and collect all image URLs into a list (already ordered by createdAt ASC)
+            imagesMap = imageResults.stream()
+                    .collect(Collectors.groupingBy(
+                            row -> ((Number) row[0]).longValue(), // detailId
+                            Collectors.mapping(
+                                    row -> (String) row[1], // imageUrl
+                                    Collectors.toList()
+                            )
+                    ));
+        }
+
+        final Map<Long, List<String>> finalImagesMap = imagesMap; // Final variable for use in lambda
+
         return orderDetails.stream()
                 .map(detail -> {
                     // Get snapshot promotion data if exists
@@ -330,9 +356,13 @@ public class OrderServiceImpl implements OrderService {
                         promotionName = null;
                     }
 
+                    // Get images list for this productDetailId
+                    Long productDetailId = detail.getProductDetail().getId();
+                    List<String> images = finalImagesMap.getOrDefault(productDetailId, List.of());
+
                     return OrderResponse.OrderDetailResponse.builder()
                             .id(detail.getId())
-                            .productDetailId(detail.getProductDetail().getId())
+                            .productDetailId(productDetailId)
                             .title(detail.getTitle())
                             .colorLabel(detail.getColorLabel())
                             .sizeLabel(detail.getSizeLabel())
@@ -343,6 +373,7 @@ public class OrderServiceImpl implements OrderService {
                             .promotionId(promotionId)
                             .promotionName(promotionName)
                             .totalPrice(totalPrice)
+                            .images(images) 
                             .build();
                 })
                 .toList();

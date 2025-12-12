@@ -19,6 +19,14 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Long
     
     @Query("SELECT COUNT(pi) FROM ProductImage pi WHERE pi.detail.id = :detailId")
     long countByDetailId(@Param("detailId") Long detailId);
+    
+    @Query("""
+        SELECT pi.detail.id, pi.image.url 
+        FROM ProductImage pi 
+        WHERE pi.detail.id IN :detailIds 
+        ORDER BY pi.detail.id, pi.createdAt ASC
+        """)
+    List<Object[]> findAllImageUrlsByDetailIds(@Param("detailIds") List<Long> detailIds);
 }
 
 

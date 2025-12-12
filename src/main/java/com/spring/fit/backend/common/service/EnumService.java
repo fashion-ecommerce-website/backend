@@ -20,7 +20,8 @@ public class EnumService {
             getEnumValues(VoucherUsageStatus.class),
             getEnumValues(AudienceType.class),
             getEnumValues(VoucherType.class),
-            getEnumValues(PeriodType.class)
+            getEnumValues(PeriodType.class),
+            getEnumValues(RefundStatus.class)
         );
     }
 
