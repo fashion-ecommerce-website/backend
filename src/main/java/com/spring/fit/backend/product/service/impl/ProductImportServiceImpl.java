@@ -184,9 +184,43 @@ public class ProductImportServiceImpl implements ProductImportService {
                 detail.setSlug(productServiceImpl.generateSlug(group.getProductTitle(), color.getName(), size.getCode()));
                 detail = productDetailRepository.save(detail);
 
-                // 1️⃣ Upload file lên Cloudinary
-                List<String> cdnUrls = new ArrayList<>();
-                if (d.getLocalFiles() != null) {
+                List<String> finalUrls = new ArrayList<>();
+
+              
+                if (d.getImageUrls() != null) {
+                    for (String url : d.getImageUrls()) {
+                        if (url == null || url.isEmpty()) continue;
+                        
+                        try {
+                            String finalUrl;
+                            
+                            if (url.startsWith("data:")) {
+                                
+                                finalUrl = imageService.uploadBase64Image(url, "import/" + product.getId());
+                            } else {
+                                
+                                finalUrl = url;
+                            }
+                            
+                            Image img = new Image();
+                            img.setUrl(finalUrl);
+                            img.setAlt(color.getName());
+                            img = imageRepository.save(img);
+
+                            ProductImage pi = new ProductImage();
+                            pi.setDetail(detail);
+                            pi.setImage(img);
+                            productImageRepository.save(pi);
+
+                            finalUrls.add(finalUrl);
+                        } catch (Exception ex) {
+                            log.error("Failed to process image URL: {}", ex.getMessage());
+                        }
+                    }
+                }
+
+                
+                if (finalUrls.isEmpty() && d.getLocalFiles() != null) {
                     for (File f : d.getLocalFiles()) {
                         try {
                             String url = imageService.uploadImage(f, "import/" + product.getId());
@@ -200,17 +234,14 @@ public class ProductImportServiceImpl implements ProductImportService {
                             pi.setImage(img);
                             productImageRepository.save(pi);
 
-                            cdnUrls.add(url);
-
+                            finalUrls.add(url);
                         } catch (Exception ex) {
-                            log.error("Failed to upload or save image {}: {}", f.getAbsolutePath(), ex.getMessage());
+                            log.error("Failed to upload image {}: {}", f.getAbsolutePath(), ex.getMessage());
                         }
                     }
                 }
 
-                // 2️⃣ Cập nhật imageUrls để FE nhận
-                d.setImageUrls(cdnUrls);
-
+                d.setImageUrls(finalUrls);
             }
 
             result.add(group);

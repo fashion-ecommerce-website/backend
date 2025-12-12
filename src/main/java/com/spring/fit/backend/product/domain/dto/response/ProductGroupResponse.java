@@ -14,9 +14,10 @@ public class ProductGroupResponse {
     private String category;
     private String productTitle;
     private String description;
+    private List<String> imageUrls; 
     private List<ProductDetailPreviewResponse> productDetails = new ArrayList<>();
 
-    public ProductGroupResponse(String productTitle, String description,String category) {
+    public ProductGroupResponse(String productTitle, String description, String category) {
         this.productTitle = productTitle;
         this.description = description;
         this.category = category;

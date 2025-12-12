@@ -71,5 +71,16 @@ public class CloudinaryService implements ImageService {
         return null;
     }
 
-
+    @Override
+    public String uploadBase64Image(String base64DataUrl, String folder) throws IOException {
+        // Parse base64 data URL: data:image/png;base64,iVBORw0KGgo...
+        if (base64DataUrl == null || !base64DataUrl.startsWith("data:")) {
+            throw new IOException("Invalid base64 data URL");
+        }
+        
+       
+        Map uploadResult = cloudinary.uploader().upload(base64DataUrl,
+                ObjectUtils.asMap("folder", folder));
+        return uploadResult.get("secure_url").toString();
+    }
 }
