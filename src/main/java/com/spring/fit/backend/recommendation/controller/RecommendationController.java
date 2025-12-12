@@ -3,7 +3,9 @@ package com.spring.fit.backend.recommendation.controller;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.recommendation.domain.dto.InteractionEventRequest;
+import com.spring.fit.backend.recommendation.domain.dto.SizeRecommendationResponse;
 import com.spring.fit.backend.recommendation.service.RecommendationService;
+import com.spring.fit.backend.recommendation.service.SizeRecommendationService;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import jakarta.validation.Valid;
@@ -28,6 +30,7 @@ public class RecommendationController {
 
     private final RecommendationService recommendationService;
     private final UserRepository userRepository;
+    private final SizeRecommendationService sizeRecommendationService;
 
     @PostMapping("/interactions")
     public ResponseEntity<Void> recordInteraction(@Valid @RequestBody InteractionEventRequest request) {
@@ -91,6 +94,23 @@ public class RecommendationController {
                 itemId, userId, limit);
         
         return ResponseEntity.ok(similarItems);
+    }
+
+    @GetMapping("/size-recommendation/{productId}")
+    public ResponseEntity<SizeRecommendationResponse> getSizeRecommendation(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "30") Integer similarUserLimit) {
+        
+        Long userId = getCurrentUserId()
+                .orElseThrow(() -> new ErrorException(HttpStatus.UNAUTHORIZED, "User must be authenticated"));
+        
+        log.info("Getting size recommendation for user: {}, product: {}, similarUserLimit: {}", 
+                userId, productId, similarUserLimit);
+        
+        SizeRecommendationResponse recommendation = sizeRecommendationService.getSizeRecommendation(
+                userId, productId, similarUserLimit);
+        
+        return ResponseEntity.ok(recommendation);
     }
 
     @PostMapping("/admin/train-model")
