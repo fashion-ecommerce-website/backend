@@ -1419,6 +1419,7 @@ public class ProductServiceImpl implements ProductService {
         response.setId(product.getId());
         response.setTitle(product.getTitle());
         response.setDescription(product.getDescription());
+        response.setIsActive(product.getIsActive());
         response.setCreatedAt(product.getCreatedAt());
         response.setUpdatedAt(product.getUpdatedAt());
 
