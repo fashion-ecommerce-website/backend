@@ -425,6 +425,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .map(t -> PromotionResponse.TargetItem.builder()
                         .targetType(t.getTargetType())
                         .targetId(t.getTargetId())
+                        .targetName(getTargetName(t.getTargetType(), t.getTargetId()))
                         .build())
                 .toList();
 
@@ -440,6 +441,20 @@ public class PromotionServiceImpl implements PromotionService {
                 .updatedAt(p.getUpdatedAt())
                 .targets(targets)
                 .build();
+    }
+
+    private String getTargetName(PromotionTargetType targetType, Long targetId) {
+        return switch (targetType) {
+            case SKU -> productDetailRepository.findById(targetId)
+                    .map(pd -> pd.getProduct().getTitle() + " - " + pd.getColor().getName() + " - " + pd.getSize().getLabel())
+                    .orElse(null);
+            case PRODUCT -> productMainRepository.findById(targetId)
+                    .map(product -> product.getTitle())
+                    .orElse(null);
+            case CATEGORY -> categoryRepository.findById(targetId)
+                    .map(category -> category.getName())
+                    .orElse(null);
+        };
     }
 
     private Pageable buildPageable(String sort, int page, int pageSize) {
