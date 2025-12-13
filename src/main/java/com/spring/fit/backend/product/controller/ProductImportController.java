@@ -22,7 +22,9 @@ public class ProductImportController {
     public ResponseEntity<List<ProductGroupResponse>> importProductsWithZips(
             @RequestParam("csv") MultipartFile csv,
             @RequestParam("zips") List<MultipartFile> zips) {
-
+        System.out.println("=== CSV: " + csv.getOriginalFilename());
+        System.out.println("=== ZIP COUNT: " + zips.size());
+        zips.forEach(z -> System.out.println("ZIP FILE: " + z.getOriginalFilename()));
         List<ProductGroupResponse> preview = productImportService.parseCsvWithZips(csv, zips);
         return ResponseEntity.ok(preview);
     }

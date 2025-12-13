@@ -1,15 +1,14 @@
 package com.spring.fit.backend.review.domain.entity;
 
-import com.spring.fit.backend.product.domain.entity.ProductDetail;
-import com.spring.fit.backend.security.domain.entity.UserEntity;
+import com.spring.fit.backend.order.domain.entity.OrderDetail;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "reviews",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "product_detail_id"}))
+@Table(name = "reviews")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,25 +17,20 @@ import java.time.LocalDateTime;
 public class Review {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "order_detail_id")
     private Long id;
 
-    // ==========================
-    // Quan hệ tới User
-    // ==========================
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserEntity user;
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_detail_id", nullable = false)
+    private OrderDetail orderDetail;
 
-    // ==========================
-    // Quan hệ tới ProductDetail
-    // ==========================
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_detail_id", nullable = false)
-    private ProductDetail productDetail;
-
-    @Column(nullable = false)
-    private Short rating;
+    @Column(
+            nullable = false,
+            precision = 2, // tổng số chữ số
+            scale = 2      // số chữ số thập phân
+    )
+    private BigDecimal rating;
 
     @Column(columnDefinition = "text")
     private String content;
@@ -49,3 +43,4 @@ public class Review {
     )
     private LocalDateTime createdAt;
 }
+
