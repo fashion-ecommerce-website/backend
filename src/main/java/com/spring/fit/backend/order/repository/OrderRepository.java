@@ -161,7 +161,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     SELECT 
         o.user.id AS userId,
         od.sizeLabel AS sizeLabel,
-        COALESCE(s.status, com.spring.fit.backend.common.enums.FulfillmentStatus.UNFULFILLED) AS shipmentStatus,
+        COALESCE(s.status, 'PENDING') AS shipmentStatus,
         o.status AS orderStatus,
         COALESCE(r.rating, 0) AS rating,
         o.createdAt AS purchaseDate
