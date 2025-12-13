@@ -1,5 +1,6 @@
 package com.spring.fit.backend.review.domain.dto.request;
 
+import jakarta.persistence.Column;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -7,18 +8,26 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class CreateReviewRequest {
 
-    @NotNull(message = "productDetailId cannot be null")
-    private Long productDetailId;
+    @NotNull
+    private Long orderId;
 
-    @NotNull(message = "rating cannot be null")
-    @Min(value = 1, message = "rating must be >= 1")
-    @Max(value = 5, message = "rating must be <= 5")
-    private Short rating;
+    @NotNull
+    private Long orderDetailId;
+
+    @Column(
+            nullable = false,
+            precision = 2, // tổng số chữ số
+            scale = 2      // số chữ số thập phân
+    )
+    private BigDecimal rating;
 
     private String content;
 }
+
