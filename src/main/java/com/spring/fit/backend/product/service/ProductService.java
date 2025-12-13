@@ -62,9 +62,9 @@ public interface ProductService {
 
     ProductResponse.ProductDetailResponse deleteProductDetailImages(Long detailId, DeleteProductDetailImagesRequest request);
 
-    void deleteProduct(Long id);
+    void toggleProductActive(Long id);
 
-    void deleteProductDetail(Long id);
+    void toggleProductDetailActive(Long id);
 
     List<ProductSimpleResponse> getAllProductsSimple();
 

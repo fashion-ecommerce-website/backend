@@ -405,44 +405,44 @@ public class ProductController {
         }
     }
 
-    @DeleteMapping("/admin/{id}")
-    public ResponseEntity<Void> deleteProduct(
+    @PostMapping("/admin/{id}/toggle")
+    public ResponseEntity<Void> toggleProductActive(
             @PathVariable
             @NotNull(message = "Product ID cannot be null")
             @Positive(message = "Product ID must be positive")
             Long id
     ) {
-        log.info("Inside ProductController.deleteProduct productId={}", id);
+        log.info("Inside ProductController.toggleProductActive productId={}", id);
 
         try {
-            productService.deleteProduct(id);
+            productService.toggleProductActive(id);
 
-            log.info("Inside ProductController.deleteProduct success productId={}", id);
+            log.info("Inside ProductController.toggleProductActive success productId={}", id);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            log.error("Inside ProductController.deleteProduct error productId={}, error={}", id, e.getMessage(), e);
+            log.error("Inside ProductController.toggleProductActive error productId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }
 
-    @DeleteMapping("/admin/details/{id}")
-    public ResponseEntity<Void> deleteProductDetail(
+    @PostMapping("/admin/details/{id}/toggle")
+    public ResponseEntity<Void> toggleProductDetailActive(
             @PathVariable
-            @NotNull(message = "Product ID cannot be null")
-            @Positive(message = "Product ID must be positive")
+            @NotNull(message = "Product detail ID cannot be null")
+            @Positive(message = "Product detail ID must be positive")
             Long id
     ) {
-        log.info("Inside ProductController.deleteProductDetail detailId={}", id);
+        log.info("Inside ProductController.toggleProductDetailActive detailId={}", id);
 
         try {
-            productService.deleteProductDetail(id);
+            productService.toggleProductDetailActive(id);
 
-            log.info("Inside ProductController.deleteProductDetail success detailId={}", id);
+            log.info("Inside ProductController.toggleProductDetailActive success detailId={}", id);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            log.error("Inside ProductController.deleteProductDetail error detailId={}, error={}", id, e.getMessage(), e);
+            log.error("Inside ProductController.toggleProductDetailActive error detailId={}, error={}", id, e.getMessage(), e);
             throw e;
         }
     }

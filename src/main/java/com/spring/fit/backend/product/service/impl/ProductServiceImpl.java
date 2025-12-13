@@ -442,46 +442,51 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Getting products with promotion for productIds: {}", productIds);
         
         try {
-            // Lấy danh sách sản phẩm từ productIds (mỗi product lấy một detailId bất kỳ)
             List<ProductCardView> products = productRepository.findProductsByProductIds(productIds);
 
-            // Áp dụng promotion cho từng sản phẩm
-            List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
-                    .map(card -> {
-                        var applyRes = PromotionApplyResponse.builder().build();
-                        try {
-                            var applyReq = PromotionApplyRequest.builder()
-                                    .skuId(card.getDetailId())
-                                    .basePrice(card.getPrice())
-                                    .build();
-                            applyRes = promotionService.applyPromotionForSku(applyReq);
-                        } catch (Exception ex) {
-                            // fallback giữ nguyên giá nếu có lỗi
-                            applyRes = PromotionApplyResponse.builder()
-                                    .basePrice(card.getPrice())
-                                    .finalPrice(card.getPrice())
-                                    .percentOff(0)
-                                    .build();
-                        }
-                        return ProductCardWithPromotionResponse.builder()
-                                .productId(card.getProductId())
-                                .detailId(card.getDetailId())
-                                .productTitle(card.getProductTitle())
-                                .productSlug(card.getProductSlug())
-                                .colorName(card.getColorName())
-                                .price(card.getPrice())
-                                .finalPrice(applyRes.getFinalPrice())
-                                .percentOff(applyRes.getPercentOff())
-                                .promotionId(applyRes.getPromotionId())
-                                .promotionName(applyRes.getPromotionName())
-                                .quantity(card.getQuantity())
-                                .colors(card.getColors())
-                                .imageUrls(card.getImageUrls())
-                                .build();
-                    })
+            Map<Long, ProductCardWithPromotionResponse> productMap = new HashMap<>();
+            
+            for (ProductCardView card : products) {
+                var applyRes = PromotionApplyResponse.builder().build();
+                try {
+                    var applyReq = PromotionApplyRequest.builder()
+                            .skuId(card.getDetailId())
+                            .basePrice(card.getPrice())
+                            .build();
+                    applyRes = promotionService.applyPromotionForSku(applyReq);
+                } catch (Exception ex) {
+                    applyRes = PromotionApplyResponse.builder()
+                            .basePrice(card.getPrice())
+                            .finalPrice(card.getPrice())
+                            .percentOff(0)
+                            .build();
+                }
+                
+                ProductCardWithPromotionResponse response = ProductCardWithPromotionResponse.builder()
+                        .productId(card.getProductId())
+                        .detailId(card.getDetailId())
+                        .productTitle(card.getProductTitle())
+                        .productSlug(card.getProductSlug())
+                        .colorName(card.getColorName())
+                        .price(card.getPrice())
+                        .finalPrice(applyRes.getFinalPrice())
+                        .percentOff(applyRes.getPercentOff())
+                        .promotionId(applyRes.getPromotionId())
+                        .promotionName(applyRes.getPromotionName())
+                        .quantity(card.getQuantity())
+                        .colors(card.getColors())
+                        .imageUrls(card.getImageUrls())
+                        .build();
+                
+                productMap.put(card.getProductId(), response);
+            }
+
+            List<ProductCardWithPromotionResponse> enrichedProducts = productIds.stream()
+                    .map(productMap::get)
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            log.debug("Found {} products with promotion for productIds", enrichedProducts.size());
+            log.debug("Found {} products with promotion for productIds (preserved order)", enrichedProducts.size());
             
             return enrichedProducts;
             
@@ -1098,44 +1103,46 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public void deleteProduct(Long id) {
-        log.info("Deleting product ID: {}", id);
+    public void toggleProductActive(Long id) {
+        log.info("Toggling product active status for ID: {}", id);
 
-        Product product = productMainRepository.findActiveProductById(id)
+        Product product = productMainRepository.findById(id)
             .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product not found with ID: " + id));
 
-        // Soft delete - set isActive = false
-        product.setIsActive(false);
+        // Toggle isActive status
+        boolean newStatus = !Boolean.TRUE.equals(product.getIsActive());
+        product.setIsActive(newStatus);
         product.setUpdatedAt(LocalDateTime.now());
 
-        // Also soft delete all product details
+        // Also toggle all product details to match
         if (product.getDetails() != null) {
             product.getDetails().forEach(detail -> {
-                detail.setIsActive(false);
+                detail.setIsActive(newStatus);
                 detail.setUpdatedAt(LocalDateTime.now());
             });
         }
 
         productMainRepository.save(product);
 
-        log.info("Successfully deleted product ID: {}", id);
+        log.info("Successfully toggled product ID: {} to isActive={}", id, newStatus);
     }
 
     @Override
     @Transactional
-    public void deleteProductDetail(Long id) {
-        log.info("Deleting product detail ID: {}", id);
+    public void toggleProductDetailActive(Long id) {
+        log.info("Toggling product detail active status for ID: {}", id);
 
-        ProductDetail product = productDetailRepository.findActiveProductDetailById(id)
+        ProductDetail productDetail = productDetailRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + id));
 
-        // Soft delete - set isActive = false
-        product.setIsActive(false);
-        product.setUpdatedAt(LocalDateTime.now());
+        // Toggle isActive status
+        boolean newStatus = !Boolean.TRUE.equals(productDetail.getIsActive());
+        productDetail.setIsActive(newStatus);
+        productDetail.setUpdatedAt(LocalDateTime.now());
 
-        productDetailRepository.save(product);
+        productDetailRepository.save(productDetail);
 
-        log.info("Successfully deleted product detail ID: {}", id);
+        log.info("Successfully toggled product detail ID: {} to isActive={}", id, newStatus);
     }
 
     @Override
