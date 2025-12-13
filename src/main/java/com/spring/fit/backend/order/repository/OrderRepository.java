@@ -158,24 +158,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
          * Returns: userId, sizeLabel, shipmentStatus, orderStatus, rating, purchaseDate
          */
         @Query("""
-            SELECT 
-                o.user.id AS userId,
-                od.sizeLabel AS sizeLabel,
-                COALESCE(s.status, 'PENDING') AS shipmentStatus,
-                o.status AS orderStatus,
-                COALESCE(r.rating, 0) AS rating,
-                o.createdAt AS purchaseDate
-            FROM Order o
-            JOIN o.orderDetails od
-            JOIN od.productDetail pd
-            LEFT JOIN o.shipments s
-            LEFT JOIN Review r ON r.user.id = o.user.id AND r.productDetail.id = pd.id
-            WHERE o.user.id IN :userIds
-              AND pd.product.id = :productId
-            ORDER BY o.createdAt DESC
-            """)
+    SELECT 
+        o.user.id AS userId,
+        od.sizeLabel AS sizeLabel,
+        COALESCE(s.status, 'PENDING') AS shipmentStatus,
+        o.status AS orderStatus,
+        COALESCE(r.rating, 0) AS rating,
+        o.createdAt AS purchaseDate
+    FROM Order o
+    JOIN o.orderDetails od
+    JOIN od.productDetail pd
+    LEFT JOIN o.shipments s
+    LEFT JOIN od.review r
+    WHERE o.user.id IN :userIds
+      AND pd.product.id = :productId
+    ORDER BY o.createdAt DESC
+""")
         List<Object[]> findOrderHistoryWithShipmentStatus(
-            @Param("userIds") List<Long> userIds,
-            @Param("productId") Long productId
+                @Param("userIds") List<Long> userIds,
+                @Param("productId") Long productId
         );
+
 }

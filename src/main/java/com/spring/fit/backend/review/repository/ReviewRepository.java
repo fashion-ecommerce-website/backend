@@ -20,21 +20,30 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     where pd.id = :productDetailId
     order by r.createdAt desc
 """)
-    List<Review> findReviewsByProductDetailId(Long productDetailId);
-    @Query("""
-        select r from Review r
-        join r.orderDetail od
-        where od.order.user.id = :userId
-        order by r.createdAt desc
-    """)
-    List<Review> findUserReviews(Long userId);
+    List<Review> findReviewsByProductDetailId(
+            @Param("productDetailId") Long productDetailId
+    );
 
     @Query("""
-        select r from Review r
-        join r.orderDetail od
-        join od.productDetail pd
-        where pd.product.id = :productId
-        order by r.createdAt desc
-    """)
-    List<Review> findAllByProductId(Long productId);
+    select r from Review r
+    join r.orderDetail od
+    where od.order.user.id = :userId
+    order by r.createdAt desc
+""")
+    List<Review> findUserReviews(
+            @Param("userId") Long userId
+    );
+
+
+    @Query("""
+    select r from Review r
+    join r.orderDetail od
+    join od.productDetail pd
+    where pd.product.id = :productId
+    order by r.createdAt desc
+""")
+    List<Review> findAllByProductId(
+            @Param("productId") Long productId
+    );
+
 }
