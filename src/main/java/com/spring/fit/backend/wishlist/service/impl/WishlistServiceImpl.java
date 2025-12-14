@@ -37,19 +37,22 @@ public class WishlistServiceImpl implements WishlistService {
     private final UserRepository userRepository;
     private final PromotionService promotionService;
 
+
     /**
-     * Toggle (add/remove) wishlist item cho user
+     * Toggle wishlist (add / remove)
      */
     @Override
     @Transactional
     public WishlistToggleResponse toggleWishlist(String userEmail, Long detailId) {
+
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
         ProductDetail detail = productDetailRepository.findById(detailId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found"));
 
-        Optional<Wishlist> existing = wishlistRepository.findByUserIdAndDetailId(user.getId(), detailId);
+        Optional<Wishlist> existing =
+                wishlistRepository.findByUserAndProductDetail(user, detail);
 
         WishlistToggleResponse response = new WishlistToggleResponse();
         response.setProductDetail(toProductDetailResponse(detail));
@@ -61,9 +64,8 @@ public class WishlistServiceImpl implements WishlistService {
             log.info("Removed from wishlist: userId={}, detailId={}", user.getId(), detailId);
         } else {
             Wishlist wishlist = Wishlist.builder()
-                    .userId(user.getId())
-                    .detailId(detailId)
-                    .createdAt(Timestamp.valueOf(LocalDateTime.now()))
+                    .user(user)
+                    .productDetail(detail)
                     .build();
 
             Wishlist saved = wishlistRepository.save(wishlist);
@@ -76,35 +78,50 @@ public class WishlistServiceImpl implements WishlistService {
     }
 
     /**
-     * Lấy toàn bộ wishlist của user
+     * Get wishlist of user
      */
     @Override
     @Transactional(readOnly = true)
     public List<ProductDetailResponse> getWishlistByUserEmail(String userEmail) {
+
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-        return wishlistRepository.findAllByUserId(user.getId()).stream()
-                .map(w -> productDetailRepository.findById(w.getDetailId())
-                        .map(this::toProductDetailResponse)
-                        .orElse(null))
-                .filter(d -> d != null)
+        return wishlistRepository.findAllByUser(user).stream()
+                .map(w -> toProductDetailResponse(w.getProductDetail()))
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Get wishlist with promotion
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ProductDetailWithPromotionResponse> getWishlistByUserEmailWithPromotion(String userEmail) {
+
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-        return wishlistRepository.findAllByUserId(user.getId()).stream()
-                .map(w -> productDetailRepository.findById(w.getDetailId())
-                        .map(this::toProductDetailWithPromotionResponse)
-                        .orElse(null))
-                .filter(d -> d != null)
+        return wishlistRepository.findAllByUser(user).stream()
+                .map(w -> toProductDetailWithPromotionResponse(w.getProductDetail()))
                 .collect(Collectors.toList());
     }
+
+    /**
+     * Clear wishlist
+     */
+    @Override
+    @Transactional
+    public void clearWishlistByUser(String userEmail) {
+
+        UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+
+        wishlistRepository.deleteAllByUser(user);
+        log.info("Cleared wishlist for userId={}", user.getId());
+    }
+
+    // ===================== MAPPING =====================
 
     private ProductDetailResponse toProductDetailResponse(ProductDetail detail) {
         return ProductDetailResponse.builder()
@@ -128,57 +145,37 @@ public class WishlistServiceImpl implements WishlistService {
     }
 
     private ProductDetailWithPromotionResponse toProductDetailWithPromotionResponse(ProductDetail detail) {
-        // Tạo base response từ ProductDetail
-        ProductDetailResponse baseResponse = toProductDetailResponse(detail);
-        
-        // Áp dụng promotion
-        var applyRes = PromotionApplyResponse.builder().build();
+
+        ProductDetailResponse base = toProductDetailResponse(detail);
+
+        PromotionApplyResponse promo;
         try {
-            var applyReq = PromotionApplyRequest.builder()
-                    .skuId(detail.getId())
-                    .basePrice(detail.getPrice())
-                    .build();
-            applyRes = promotionService.applyPromotionForSku(applyReq);
-        } catch (Exception ex) {
-            // fallback giữ nguyên giá nếu có lỗi
-            applyRes = PromotionApplyResponse.builder()
+            promo = promotionService.applyPromotionForSku(
+                    PromotionApplyRequest.builder()
+                            .skuId(detail.getId())
+                            .basePrice(detail.getPrice())
+                            .build()
+            );
+        } catch (Exception e) {
+            promo = PromotionApplyResponse.builder()
                     .basePrice(detail.getPrice())
                     .finalPrice(detail.getPrice())
                     .percentOff(0)
                     .build();
         }
-        
+
         return ProductDetailWithPromotionResponse.builder()
-                .detailId(baseResponse.getDetailId())
-                .title(baseResponse.getTitle())
-                .price(baseResponse.getPrice())
-                .finalPrice(applyRes.getFinalPrice())
-                .percentOff(applyRes.getPercentOff())
-                .promotionId(applyRes.getPromotionId())
-                .promotionName(applyRes.getPromotionName())
-                .activeColor(baseResponse.getActiveColor())
-                .activeSize(baseResponse.getActiveSize())
-                .images(baseResponse.getImages())
-                .colors(baseResponse.getColors())
-                .mapSizeToQuantity(baseResponse.getMapSizeToQuantity())
-                .description(baseResponse.getDescription())
+                .detailId(base.getDetailId())
+                .title(base.getTitle())
+                .price(base.getPrice())
+                .finalPrice(promo.getFinalPrice())
+                .percentOff(promo.getPercentOff())
+                .promotionId(promo.getPromotionId())
+                .promotionName(promo.getPromotionName())
+                .activeColor(base.getActiveColor())
+                .activeSize(base.getActiveSize())
+                .images(base.getImages())
+                .mapSizeToQuantity(base.getMapSizeToQuantity())
                 .build();
-    }
-
-    @Override
-    @Transactional
-    public void clearWishlistByUser(String userEmail) {
-        UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
-
-        List<Wishlist> wishlists = wishlistRepository.findAllByUserId(user.getId());
-
-        if (wishlists.isEmpty()) {
-            log.info("No wishlist items to remove for userId={}", user.getId());
-            return;
-        }
-
-        wishlistRepository.deleteAll(wishlists);
-        log.info("Cleared all wishlist items for userId={}", user.getId());
     }
 }
