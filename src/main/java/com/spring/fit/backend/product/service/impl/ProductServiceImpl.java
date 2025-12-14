@@ -1046,7 +1046,7 @@ public class ProductServiceImpl implements ProductService {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, "No images provided");
             }
 
-            // 3. Check total image count limit
+            // 3. Check total image count limit (check against the current detail)
             long currentImageCount = productImageRepository.countByDetailId(detailId);
             if (currentImageCount + newImages.size() > 5) {
                 throw new ErrorException(HttpStatus.BAD_REQUEST,
@@ -1054,16 +1054,32 @@ public class ProductServiceImpl implements ProductService {
                                 newImages.size(), currentImageCount));
             }
 
-            // 4. Handle new images
-            handleProductDetailImages(productDetail, newImages);
+            // 4. Find all product details with the same product and color
+            List<ProductDetail> sameColorDetails = productDetailRepository.findByProductIdAndColorId(
+                    productDetail.getProduct().getId(),
+                    productDetail.getColor().getId()
+            );
 
-            // 5. Refresh product detail to get updated images
+            log.info("Found {} product details with same color (colorId={}) for product (productId={})",
+                    sameColorDetails.size(), productDetail.getColor().getId(), productDetail.getProduct().getId());
+
+            // 5. Upload images once and add to all product details with same color
+            List<Image> uploadedImages = uploadImages(productDetail, newImages);
+
+            // 6. Link uploaded images to all product details with same color
+            for (ProductDetail detail : sameColorDetails) {
+                linkImagesToProductDetail(detail, uploadedImages);
+            }
+
+            // 7. Refresh product detail to get updated images
             productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
 
-            log.info("Successfully added {} images for product detail ID: {}", newImages.size(), detailId);
+            log.info("Successfully added {} images for {} product details with same color", newImages.size(), sameColorDetails.size());
             return mapToProductDetailResponse(productDetail);
 
+        } catch (ErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error adding images for product detail ID {}: {}", detailId, e.getMessage(), e);
             throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error adding product detail images: " + e.getMessage());
@@ -1085,16 +1101,29 @@ public class ProductServiceImpl implements ProductService {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, "No image URLs provided for deletion");
             }
 
-            // 3. Delete specified images
-            deleteProductImages(productDetail, request.getImageUrls());
+            // 3. Find all product details with the same product and color
+            List<ProductDetail> sameColorDetails = productDetailRepository.findByProductIdAndColorId(
+                    productDetail.getProduct().getId(),
+                    productDetail.getColor().getId()
+            );
 
-            // 4. Refresh product detail to get updated images
+            log.info("Found {} product details with same color (colorId={}) for product (productId={})",
+                    sameColorDetails.size(), productDetail.getColor().getId(), productDetail.getProduct().getId());
+
+            // 4. Delete specified images from all product details with same color
+            for (ProductDetail detail : sameColorDetails) {
+                deleteProductImages(detail, request.getImageUrls());
+            }
+
+            // 5. Refresh product detail to get updated images
             productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
 
-            log.info("Successfully deleted {} images for product detail ID: {}", request.getImageUrls().size(), detailId);
+            log.info("Successfully deleted {} images for {} product details with same color", request.getImageUrls().size(), sameColorDetails.size());
             return mapToProductDetailResponse(productDetail);
 
+        } catch (ErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error deleting images for product detail ID {}: {}", detailId, e.getMessage(), e);
             throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error deleting product detail images: " + e.getMessage());
@@ -1297,6 +1326,60 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * Upload images to Cloudinary and create Image entities
+     * @return List of uploaded Image entities
+     */
+    private List<Image> uploadImages(ProductDetail productDetail, List<MultipartFile> images) {
+        List<Image> uploadedImages = new ArrayList<>();
+
+        for (MultipartFile imageFile : images) {
+            try {
+                // Upload image to Cloudinary
+                String imageUrl = imageService.uploadImage(imageFile, "products");
+
+                // Create or find Image entity
+                Image image = imageRepository.findByUrl(imageUrl)
+                    .orElseGet(() -> {
+                        Image newImage = new Image();
+                        newImage.setUrl(imageUrl);
+                        newImage.setAlt(productDetail.getProduct().getTitle());
+                        newImage.setCreatedAt(LocalDateTime.now());
+                        return imageRepository.save(newImage);
+                    });
+
+                uploadedImages.add(image);
+
+            } catch (IOException e) {
+                log.error("Error uploading image for product detail {}: {}", productDetail.getId(), e.getMessage());
+                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error uploading image: " + e.getMessage());
+            }
+        }
+
+        return uploadedImages;
+    }
+
+    /**
+     * Link existing Image entities to a ProductDetail
+     */
+    private void linkImagesToProductDetail(ProductDetail productDetail, List<Image> images) {
+        for (Image image : images) {
+            // Check if this image is already linked to this product detail
+            boolean alreadyLinked = productImageRepository.existsByDetailIdAndImageId(
+                    productDetail.getId(), image.getId());
+
+            if (!alreadyLinked) {
+                ProductImage productImage = new ProductImage();
+                productImage.setDetail(productDetail);
+                productImage.setImage(image);
+                productImage.setCreatedAt(LocalDateTime.now());
+                productImageRepository.save(productImage);
+                log.debug("Linked image {} to product detail {}", image.getId(), productDetail.getId());
+            } else {
+                log.debug("Image {} already linked to product detail {}", image.getId(), productDetail.getId());
+            }
+        }
+    }
 
     private void deleteProductImages(ProductDetail detail, List<String> imageUrls) {
         for (String imageUrl : imageUrls) {

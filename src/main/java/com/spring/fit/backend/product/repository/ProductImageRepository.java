@@ -27,6 +27,9 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Long
         ORDER BY pi.detail.id, pi.createdAt ASC
         """)
     List<Object[]> findAllImageUrlsByDetailIds(@Param("detailIds") List<Long> detailIds);
+
+    @Query("SELECT COUNT(pi) > 0 FROM ProductImage pi WHERE pi.detail.id = :detailId AND pi.image.id = :imageId")
+    boolean existsByDetailIdAndImageId(@Param("detailId") Long detailId, @Param("imageId") Long imageId);
 }
 
 

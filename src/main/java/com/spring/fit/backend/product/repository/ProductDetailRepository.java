@@ -125,6 +125,16 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
         WHERE pd.isActive = true AND p.isActive = true
         """)
     List<ProductDetail> findByIsActiveTrue();
+
+    /**
+     * Find all product details with the same product and color
+     * Used for syncing images across all sizes of the same color
+     */
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        WHERE pd.product.id = :productId AND pd.color.id = :colorId
+        """)
+    List<ProductDetail> findByProductIdAndColorId(@Param("productId") Long productId, @Param("colorId") Short colorId);
 }
 
 
