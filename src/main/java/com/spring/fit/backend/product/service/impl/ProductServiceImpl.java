@@ -1429,13 +1429,13 @@ public class ProductServiceImpl implements ProductService {
         }
 
         // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì) và detail ID tương ứng
-        String thumbnail = getThumbnailForProduct(product.getId());
+        String thumbnail = getThumbnailForProductAdmin(product.getId());
         response.setThumbnail(thumbnail);
         
-        Long currentDetailId = productRepository.findFirstDetailIdByProductId(product.getId());
+        Long currentDetailId = productRepository.findFirstDetailIdByProductIdForAdmin(product.getId());
         response.setCurrentDetailId(currentDetailId);
 
-        // Lấy danh sách màu active và inactive
+        // Lấy danh sách màu và size (bao gồm cả inactive cho admin)
         List<ColorResponse> variantColors = new ArrayList<>();
         List<SizeResponse> variantSizes = new ArrayList<>();
 
@@ -1444,19 +1444,17 @@ public class ProductServiceImpl implements ProductService {
             Map<Short, SizeResponse> sizeMap = new HashMap<>();
 
             for (ProductDetail detail : product.getDetails()) {
-                // Chỉ lấy các detail active
-                if (detail.getIsActive()) {
-                    // Lấy màu
-                    Color color = detail.getColor();
-                    if (!colorMap.containsKey(color.getId())) {
-                        colorMap.put(color.getId(), mapToColorResponse(color));
-                    }
+                // Lấy tất cả details (kể cả inactive) cho admin panel
+                // Lấy màu
+                Color color = detail.getColor();
+                if (!colorMap.containsKey(color.getId())) {
+                    colorMap.put(color.getId(), mapToColorResponse(color));
+                }
 
-                    // Lấy size
-                    Size size = detail.getSize();
-                    if (!sizeMap.containsKey(size.getId())) {
-                        sizeMap.put(size.getId(), mapToSizeResponse(size));
-                    }
+                // Lấy size
+                Size size = detail.getSize();
+                if (!sizeMap.containsKey(size.getId())) {
+                    sizeMap.put(size.getId(), mapToSizeResponse(size));
                 }
             }
 
@@ -1485,13 +1483,13 @@ public class ProductServiceImpl implements ProductService {
         return response;
     }
 
-    private String getThumbnailForProduct(Long productId) {
+    private String getThumbnailForProductAdmin(Long productId) {
         try {
-            // Lấy ảnh đầu tiên của product detail đầu tiên
-            List<String> imageUrls = productRepository.findFirstImageUrlByProductId(productId);
+            // Lấy ảnh đầu tiên của product detail đầu tiên (bao gồm cả inactive - cho admin)
+            List<String> imageUrls = productRepository.findFirstImageUrlByProductIdForAdmin(productId);
             return imageUrls.isEmpty() ? null : imageUrls.get(0);
         } catch (Exception e) {
-            log.warn("Error getting thumbnail for product {}: {}", productId, e.getMessage());
+            log.warn("Error getting thumbnail for product (admin) {}: {}", productId, e.getMessage());
             return null;
         }
     }
@@ -1503,8 +1501,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductSimpleResponse> getAllProductsSimple() {
-        log.info("Getting all products simple");
-        List<Product> products = productMainRepository.findAll();
+        log.info("Getting all active products simple");
+        List<Product> products = productMainRepository.findByIsActiveTrue();
         return products.stream()
                 .map(p -> ProductSimpleResponse.builder()
                         .id(p.getId())
@@ -1516,8 +1514,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductDetailSimpleResponse> getAllProductDetailsSimple() {
-        log.info("Getting all product details simple");
-        List<ProductDetail> details = productDetailRepository.findAll();
+        log.info("Getting all active product details simple");
+        List<ProductDetail> details = productDetailRepository.findByIsActiveTrue();
         return details.stream()
                 .map(d -> {
                     String name = d.getProduct().getTitle() + " - " + 

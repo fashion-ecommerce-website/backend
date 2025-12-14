@@ -317,22 +317,20 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
     JOIN product_details pd ON pi.detail_id = pd.id
     JOIN images i ON i.id = pi.image_id
     WHERE pd.product_id = :productId
-    AND pd.is_active = true
     ORDER BY pi.created_at ASC
     LIMIT 1
     """, nativeQuery = true)
-    List<String> findFirstImageUrlByProductId(@Param("productId") Long productId);
+    List<String> findFirstImageUrlByProductIdForAdmin(@Param("productId") Long productId);
 
     @Query(value = """
     SELECT pd.id
     FROM product_images pi
     JOIN product_details pd ON pi.detail_id = pd.id
     WHERE pd.product_id = :productId
-    AND pd.is_active = true
     ORDER BY pi.created_at ASC
     LIMIT 1
     """, nativeQuery = true)
-    Long findFirstDetailIdByProductId(@Param("productId") Long productId);
+    Long findFirstDetailIdByProductIdForAdmin(@Param("productId") Long productId);
 
     @Query(value = """
     SELECT DISTINCT c.name
