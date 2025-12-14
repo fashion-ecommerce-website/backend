@@ -55,62 +55,70 @@ public class VoucherServiceImpl implements VoucherService {
     public VoucherValidateResponse validateVoucher(VoucherValidateRequest request, Long userId) {
         log.info("Inside VoucherServiceImpl.validateVoucher, validating voucher code: {} for user: {}", request.getCode(), userId);
 
-        // 1. Find voucher by code
+        // 1. Find voucher by code (without lock - for preview only)
         Voucher voucher = voucherRepository.findValidVoucherByCode(
             request.getCode(), 
             LocalDateTime.now(), 
             request.getSubtotal()
         ).orElse(null);
 
-         if (voucher == null) {
-             return VoucherValidateResponse.builder()
-                 .valid(false)
-                 .message("Voucher code not found or invalid")
-                 .build();
-         }
-
-        // 2. Check if user exists
-        UserEntity user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // 3. Check usage limits
-         if (!checkUsageLimits(voucher, userId)) {
-             return VoucherValidateResponse.builder()
-                 .valid(false)
-                 .voucherId(voucher.getId())
-                 .code(voucher.getCode())
-                 .message("Voucher usage limit exceeded")
-                 .build();
+        if (voucher == null) {
+            return VoucherValidateResponse.builder()
+                .valid(false)
+                .message("Voucher code not found or invalid")
+                .build();
         }
 
-        // 4. Check audience type (RANK)
-         if (!checkAudienceType(voucher, user)) {
-             return VoucherValidateResponse.builder()
-                 .valid(false)
-                 .voucherId(voucher.getId())
-                 .code(voucher.getCode())
-                 .message("Voucher not applicable for your rank")
-                 .build();
-         }
+        // 2. Validate voucher using common logic
+        try {
+            validateVoucherInternal(voucher, userId);
+        } catch (ErrorException e) {
+            return VoucherValidateResponse.builder()
+                .valid(false)
+                .voucherId(voucher.getId())
+                .code(voucher.getCode())
+                .message(e.getMessage())
+                .build();
+        }
 
-        // 5. Calculate discount preview
+        // 3. Calculate discount preview
         BigDecimal discountPreview = calculateDiscount(voucher, request.getSubtotal());
 
-         return VoucherValidateResponse.builder()
-             .valid(true)
-             .voucherId(voucher.getId())
-             .code(voucher.getCode())
-             .type(voucher.getType())
-             .value(voucher.getValue())
-             .maxDiscount(voucher.getMaxDiscount())
-             .discountPreview(discountPreview)
-             .message("Voucher is valid")
-             .build();
+        return VoucherValidateResponse.builder()
+            .valid(true)
+            .voucherId(voucher.getId())
+            .code(voucher.getCode())
+            .type(voucher.getType())
+            .value(voucher.getValue())
+            .maxDiscount(voucher.getMaxDiscount())
+            .discountPreview(discountPreview)
+            .message("Voucher is valid")
+            .build();
+    }
+    
+    /**
+     * Common validation logic for voucher - used by both validateVoucher and applyVoucher
+     * @throws ErrorException if validation fails
+     */
+    private void validateVoucherInternal(Voucher voucher, Long userId) {
+        // Check usage limits
+        if (!checkUsageLimits(voucher, userId)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher usage limit exceeded");
+        }
+        
+        // Check audience type (RANK)
+        UserEntity user = userRepository.findById(userId)
+            .orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, "User not found"));
+        
+        if (!checkAudienceType(voucher, user)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher not applicable for your rank");
+        }
     }
 
     @Override
     public BigDecimal calculateDiscount(Voucher voucher, Double subtotal) {
         BigDecimal subtotalDecimal = BigDecimal.valueOf(subtotal);
+        BigDecimal discount;
         
         switch (voucher.getType()) {
             case PERCENT:
@@ -121,16 +129,25 @@ public class VoucherServiceImpl implements VoucherService {
                 // Apply max discount if exists
                 if (voucher.getMaxDiscount() != null && 
                     percentDiscount.compareTo(voucher.getMaxDiscount()) > 0) {
-                    return voucher.getMaxDiscount();
+                    discount = voucher.getMaxDiscount();
+                } else {
+                    discount = percentDiscount;
                 }
-                return percentDiscount;
+                break;
                 
             case FIXED:
-                return voucher.getValue();
+                discount = voucher.getValue();
+                break;
                 
             default:
                 return BigDecimal.ZERO;
         }
+        
+        // Cap discount to subtotal to prevent negative total
+        if (discount.compareTo(subtotalDecimal) > 0) {
+            return subtotalDecimal;
+        }
+        return discount;
     }
 
     @Override
@@ -139,9 +156,9 @@ public class VoucherServiceImpl implements VoucherService {
         
         List<Voucher> vouchers;
         if (searchCode != null && !searchCode.trim().isEmpty()) {
-            vouchers = voucherRepository.findByCodeContainingIgnoreCase(searchCode.trim());
+            vouchers = voucherRepository.findActiveVouchersByCodeContaining(searchCode.trim(), now);
         } else {
-            vouchers = voucherRepository.findAll();
+            vouchers = voucherRepository.findActiveVouchersNotExpired(now);
         }
 
         UserEntity user = userRepository.findById(userId)
@@ -205,16 +222,10 @@ public class VoucherServiceImpl implements VoucherService {
         // Lock voucher row to avoid race conditions
         Voucher voucher = voucherRepository.findValidVoucherByCodeForUpdate(
                 request.getCode(), LocalDateTime.now(), request.getSubtotal())
-                .orElse(null);
+                .orElseThrow(() -> new ErrorException(HttpStatus.BAD_REQUEST, "Voucher not found"));
 
-        if (voucher == null) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher not found");
-        }
-
-        // Validate usage limits again after locking to prevent race conditions
-        if (!checkUsageLimits(voucher, userId)) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, "Voucher usage limit exceeded");
-        }
+        // Re-validate after locking using common logic (prevents race conditions & rank bypass)
+        validateVoucherInternal(voucher, userId);
 
         // Calculate discount
         BigDecimal discount = calculateDiscount(voucher, request.getSubtotal());
@@ -226,10 +237,9 @@ public class VoucherServiceImpl implements VoucherService {
                 .order(orderId == null ? null : Order.builder().id(orderId).build())
                 .status(VoucherUsageStatus.APPLIED)
                 .discountAmount(discount)
-                .usedAt(java.time.LocalDateTime.now())
+                .usedAt(LocalDateTime.now())
                 .build();
         voucherUsageRepository.save(usage);
-
     }
 
     @Override
@@ -274,7 +284,7 @@ public class VoucherServiceImpl implements VoucherService {
         String code = generateUniqueVoucherCode();
         log.info("Creating voucher with auto-generated code: {}", code);
 
-        validateDates(request);
+        validateDatesForCreate(request);
         validateUsages(request);
         if (request.getType() == VoucherType.PERCENT && request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new IllegalArgumentException("The percentage value cannot exceed 100.");
@@ -298,6 +308,38 @@ public class VoucherServiceImpl implements VoucherService {
         Voucher voucher = voucherRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Voucher does not exist"));
 
+        LocalDateTime now = LocalDateTime.now();
+        
+        // Case 3: Sau end_at → không cho update voucher
+        if (now.isAfter(voucher.getEndAt())) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Cannot update voucher after it has expired");
+        }
+        
+        // Case 2: Trong thời gian hiệu lực → chỉ cho upgrade usage_limit_total
+        if (!now.isBefore(voucher.getStartAt()) && !now.isAfter(voucher.getEndAt())) {
+            // Voucher đang trong thời gian hiệu lực, chỉ cho phép tăng usage_limit_total
+            validateOnlyUsageLimitTotalUpgrade(voucher, request);
+            
+            // Chỉ update usage_limit_total
+            if (request.getUsageLimitTotal() != null && 
+                request.getUsageLimitTotal() > voucher.getUsageLimitTotal()) {
+                voucher.setUsageLimitTotal(request.getUsageLimitTotal());
+            }
+            
+            Voucher saved = voucherRepository.save(voucher);
+            return toAdminResponse(saved);
+        }
+        
+        // Case 1: now < start_at → có thể sửa thoải mái
+        // Nhưng nếu update start_at → bắt buộc >= now + 1 day
+        if (request.getStartAt() != null && !request.getStartAt().equals(voucher.getStartAt())) {
+            LocalDateTime minStartAt = now.plusDays(1);
+            if (request.getStartAt().isBefore(minStartAt)) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                    "When updating start_at, it must be at least 1 day from now (after " + minStartAt + ")");
+            }
+        }
+        
         validateDates(request);
         validateUsages(request);
         if (request.getType() == VoucherType.PERCENT && request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
@@ -317,6 +359,65 @@ public class VoucherServiceImpl implements VoucherService {
         
         return toAdminResponse(saved);
     }
+    
+    /**
+     * Validate that only usage_limit_total is being upgraded during active voucher period
+     */
+    private void validateOnlyUsageLimitTotalUpgrade(Voucher voucher, AdminVoucherRequest request) {
+        List<String> invalidChanges = new ArrayList<>();
+        
+        // Check if any other field is being changed
+        if (!request.getName().equals(voucher.getName())) {
+            invalidChanges.add("name");
+        }
+        if (request.getType() != voucher.getType()) {
+            invalidChanges.add("type");
+        }
+        if (request.getValue().compareTo(voucher.getValue()) != 0) {
+            invalidChanges.add("value");
+        }
+        if ((request.getMaxDiscount() == null && voucher.getMaxDiscount() != null) ||
+            (request.getMaxDiscount() != null && voucher.getMaxDiscount() == null) ||
+            (request.getMaxDiscount() != null && voucher.getMaxDiscount() != null && 
+             request.getMaxDiscount().compareTo(voucher.getMaxDiscount()) != 0)) {
+            invalidChanges.add("maxDiscount");
+        }
+        if ((request.getMinOrderAmount() == null && voucher.getMinOrderAmount() != null) ||
+            (request.getMinOrderAmount() != null && voucher.getMinOrderAmount() == null) ||
+            (request.getMinOrderAmount() != null && voucher.getMinOrderAmount() != null && 
+             request.getMinOrderAmount().compareTo(voucher.getMinOrderAmount()) != 0)) {
+            invalidChanges.add("minOrderAmount");
+        }
+        if (!request.getUsageLimitPerUser().equals(voucher.getUsageLimitPerUser())) {
+            invalidChanges.add("usageLimitPerUser");
+        }
+        if (!request.getStartAt().equals(voucher.getStartAt())) {
+            invalidChanges.add("startAt");
+        }
+        if (!request.getEndAt().equals(voucher.getEndAt())) {
+            invalidChanges.add("endAt");
+        }
+        if (request.getAudienceType() != voucher.getAudienceType()) {
+            invalidChanges.add("audienceType");
+        }
+        if (!request.getIsActive().equals(voucher.isActive())) {
+            invalidChanges.add("isActive");
+        }
+        
+        // Check usage_limit_total - only allow upgrade (increase)
+        if (request.getUsageLimitTotal() != null && 
+            !request.getUsageLimitTotal().equals(voucher.getUsageLimitTotal())) {
+            if (request.getUsageLimitTotal() < voucher.getUsageLimitTotal()) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                    "During active period, usage limit total can only be increased, not decreased");
+            }
+        }
+        
+        if (!invalidChanges.isEmpty()) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                "During active voucher period, only usage limit total can be upgraded. Invalid changes: " + invalidChanges);
+        }
+    }
 
     @Override
     public AdminVoucherResponse getAdminVoucher(Long id) {
@@ -334,6 +435,20 @@ public class VoucherServiceImpl implements VoucherService {
         voucherRepository.save(voucher);
     }
 
+
+    private void validateDatesForCreate(AdminVoucherRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        
+        if (request.getStartAt().isBefore(now)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                "start_at cannot be in the past (must be >= " + now + ")");
+        }
+        
+        if (request.getStartAt().isAfter(request.getEndAt())) {
+            throw new IllegalArgumentException("startAt must be before or equal to endAt");
+        }
+    }
+    
     private void validateDates(AdminVoucherRequest request) {
         if (request.getStartAt().isAfter(request.getEndAt())) {
             throw new IllegalArgumentException("startAt must be before or equal to endAt");
@@ -341,7 +456,15 @@ public class VoucherServiceImpl implements VoucherService {
     }
 
     private void validateUsages(AdminVoucherRequest request) {
-        if (request.getUsageLimitTotal() < request.getUsageLimitPerUser()) {
+        Integer total = request.getUsageLimitTotal();
+        Integer perUser = request.getUsageLimitPerUser();
+        
+        // Null check to prevent NPE
+        if (total == null || perUser == null) {
+            throw new IllegalArgumentException("Usage limit total and usage limit per user are required");
+        }
+        
+        if (total < perUser) {
             throw new IllegalArgumentException("Usage limit total must be greater or equal to Usage limit per user");
         }
     }
