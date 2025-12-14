@@ -17,6 +17,8 @@ import com.spring.fit.backend.promotion.domain.entity.PromotionTarget;
 import com.spring.fit.backend.promotion.domain.entity.PromotionTargetId;
 import com.spring.fit.backend.common.enums.PromotionTargetType;
 import com.spring.fit.backend.common.enums.PromotionType;
+import com.spring.fit.backend.common.exception.ErrorException;
+import org.springframework.http.HttpStatus;
 import com.spring.fit.backend.promotion.repository.PromotionRepository;
 import com.spring.fit.backend.promotion.repository.PromotionTargetRepository;
 import com.spring.fit.backend.promotion.service.PromotionService;
@@ -48,7 +50,7 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     @Transactional
     public PromotionResponse create(PromotionRequest request) {
-        validatePromotionRequest(request);
+        validatePromotionRequestForCreate(request);
 
         if (request.getTargets() != null && !request.getTargets().isEmpty()) {
             for (PromotionRequest.TargetItem target : request.getTargets()) {
@@ -348,6 +350,25 @@ public class PromotionServiceImpl implements PromotionService {
         }
     }
 
+    /**
+     * Validate promotion request for CREATE
+     * - startAt must be >= now (cannot be in the past)
+     */
+    private void validatePromotionRequestForCreate(PromotionRequest request) {
+        validatePromotionRequest(request);
+        
+        // Additional validation for CREATE: startAt must be >= now
+        LocalDateTime now = LocalDateTime.now();
+        
+        if (request.getStartAt().isBefore(now)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                "start_at cannot be in the past");
+        }
+    }
+    
+    /**
+     * Common validation for promotion request (used by both CREATE and UPDATE)
+     */
     private void validatePromotionRequest(PromotionRequest request) {
         if (request.getName() == null || request.getName().isBlank()) {
             throw new IllegalArgumentException("name is required");
