@@ -35,12 +35,12 @@ public class Review {
     @Column(columnDefinition = "text")
     private String content;
 
-    @Column(
-            name = "created_at",
-            updatable = false,
-            insertable = false,
-            columnDefinition = "timestamp default now()"
-    )
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
 }
 
