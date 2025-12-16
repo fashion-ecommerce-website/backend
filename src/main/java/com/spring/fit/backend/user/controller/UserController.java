@@ -1,7 +1,10 @@
 package com.spring.fit.backend.user.controller;
 
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
+import com.spring.fit.backend.user.domain.dto.response.UserRankResponse;
+import com.spring.fit.backend.user.service.UserRankService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +26,7 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final UserRankService userRankService;
 
     @GetMapping()
     public ResponseEntity<UserResponse> getCurrentUser() {
@@ -80,5 +84,14 @@ public class UserController {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         userService.clearRecentlyViewedProducts(email);
         return ResponseEntity.ok().build();
+    }
+
+    // ==================== Admin User Rank APIs ====================
+
+    @GetMapping("/ranks")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserRankResponse>> getAllUserRanks() {
+        List<UserRankResponse> userRanks = userRankService.getAllUserRanks();
+        return ResponseEntity.ok(userRanks);
     }
 }
