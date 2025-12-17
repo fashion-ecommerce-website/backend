@@ -19,6 +19,7 @@ public class ReviewResponse {
 
     private Long userId;
     private String username;
+    private String avatarUrl;
 
     private Long productDetailId;
 
@@ -31,11 +32,13 @@ public class ReviewResponse {
         if (review == null) return null;
 
         OrderDetail od = review.getOrderDetail();
+        var user = od.getOrder().getUser();
 
         return new ReviewResponse(
                 review.getId(),
-                od.getOrder().getUser().getId(),
-                od.getOrder().getUser().getUsername(),
+                user.getId(),
+                user.getUsername(),
+                user.getAvatarUrl(),
                 od.getProductDetail().getId(),
                 review.getRating(),
                 review.getContent(),
