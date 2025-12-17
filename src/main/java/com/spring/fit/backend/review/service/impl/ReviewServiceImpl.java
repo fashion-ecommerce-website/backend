@@ -1,5 +1,6 @@
 package com.spring.fit.backend.review.service.impl;
 
+import com.spring.fit.backend.common.enums.FulfillmentStatus;
 import com.spring.fit.backend.common.enums.OrderStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.order.domain.dto.response.OrderResponse;
@@ -58,11 +59,10 @@ public class ReviewServiceImpl implements ReviewService {
         if (!order.getUser().getId().equals(user.getId())) {
             throw new ErrorException(HttpStatus.FORBIDDEN, "Not your order");
         }
-//        OrderStatus currentStatus = order.getStatus();
-//        // 4️⃣ Check order completed
-//        if (order.getStatus() !=  OrderStatus.DELIVERED) {
-//            throw new ErrorException(HttpStatus.BAD_REQUEST, "Order not completed");
-//        }
+        // 4️⃣ Check order completed
+        if (order.getStatus() != FulfillmentStatus.FULFILLED) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Order not completed");
+        }
 
 
         // 6️⃣ Check đã review chưa

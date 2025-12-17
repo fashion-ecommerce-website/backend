@@ -133,7 +133,6 @@ public class CategoryServiceImpl implements CategoryService {
         List<Long> ids = tree.stream().map(Category::getId).toList();
 
         if (root.getIsActive()) {
-            // Inactive → check product trong toàn bộ cây
             if (productMainRepository.existsByCategoryIds(ids)) {
                 throw new ErrorException(HttpStatus.BAD_REQUEST,
                         "Cannot inactive this category tree because one or more categories are associated with products");

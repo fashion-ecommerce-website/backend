@@ -74,7 +74,7 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
             Pageable pageable
     );
 
-    @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids")
+    @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids AND p.isActive = true")
     boolean existsByCategoryIds(@Param("ids") List<Long> ids);
 
     boolean existsByTitleIgnoreCaseAndDescriptionIgnoreCaseAndCategoriesIn(
@@ -85,4 +85,6 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
 
     @Query("SELECT COUNT(p) > 0 FROM Product p WHERE p.id = :id AND p.isActive = true")
     boolean existsActiveById(@Param("id") Long id);
+
+    List<Product> findByIsActiveTrue();
 }

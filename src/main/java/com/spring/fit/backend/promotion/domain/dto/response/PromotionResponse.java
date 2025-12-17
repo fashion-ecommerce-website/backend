@@ -37,6 +37,7 @@ public class PromotionResponse {
     public static class TargetItem {
         private PromotionTargetType targetType;
         private Long targetId;
+        private String targetName;
     }
 }
 

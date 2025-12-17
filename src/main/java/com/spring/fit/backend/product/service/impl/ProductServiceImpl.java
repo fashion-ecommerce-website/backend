@@ -442,46 +442,51 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Getting products with promotion for productIds: {}", productIds);
         
         try {
-            // Lấy danh sách sản phẩm từ productIds (mỗi product lấy một detailId bất kỳ)
             List<ProductCardView> products = productRepository.findProductsByProductIds(productIds);
 
-            // Áp dụng promotion cho từng sản phẩm
-            List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
-                    .map(card -> {
-                        var applyRes = PromotionApplyResponse.builder().build();
-                        try {
-                            var applyReq = PromotionApplyRequest.builder()
-                                    .skuId(card.getDetailId())
-                                    .basePrice(card.getPrice())
-                                    .build();
-                            applyRes = promotionService.applyPromotionForSku(applyReq);
-                        } catch (Exception ex) {
-                            // fallback giữ nguyên giá nếu có lỗi
-                            applyRes = PromotionApplyResponse.builder()
-                                    .basePrice(card.getPrice())
-                                    .finalPrice(card.getPrice())
-                                    .percentOff(0)
-                                    .build();
-                        }
-                        return ProductCardWithPromotionResponse.builder()
-                                .productId(card.getProductId())
-                                .detailId(card.getDetailId())
-                                .productTitle(card.getProductTitle())
-                                .productSlug(card.getProductSlug())
-                                .colorName(card.getColorName())
-                                .price(card.getPrice())
-                                .finalPrice(applyRes.getFinalPrice())
-                                .percentOff(applyRes.getPercentOff())
-                                .promotionId(applyRes.getPromotionId())
-                                .promotionName(applyRes.getPromotionName())
-                                .quantity(card.getQuantity())
-                                .colors(card.getColors())
-                                .imageUrls(card.getImageUrls())
-                                .build();
-                    })
+            Map<Long, ProductCardWithPromotionResponse> productMap = new HashMap<>();
+            
+            for (ProductCardView card : products) {
+                var applyRes = PromotionApplyResponse.builder().build();
+                try {
+                    var applyReq = PromotionApplyRequest.builder()
+                            .skuId(card.getDetailId())
+                            .basePrice(card.getPrice())
+                            .build();
+                    applyRes = promotionService.applyPromotionForSku(applyReq);
+                } catch (Exception ex) {
+                    applyRes = PromotionApplyResponse.builder()
+                            .basePrice(card.getPrice())
+                            .finalPrice(card.getPrice())
+                            .percentOff(0)
+                            .build();
+                }
+                
+                ProductCardWithPromotionResponse response = ProductCardWithPromotionResponse.builder()
+                        .productId(card.getProductId())
+                        .detailId(card.getDetailId())
+                        .productTitle(card.getProductTitle())
+                        .productSlug(card.getProductSlug())
+                        .colorName(card.getColorName())
+                        .price(card.getPrice())
+                        .finalPrice(applyRes.getFinalPrice())
+                        .percentOff(applyRes.getPercentOff())
+                        .promotionId(applyRes.getPromotionId())
+                        .promotionName(applyRes.getPromotionName())
+                        .quantity(card.getQuantity())
+                        .colors(card.getColors())
+                        .imageUrls(card.getImageUrls())
+                        .build();
+                
+                productMap.put(card.getProductId(), response);
+            }
+
+            List<ProductCardWithPromotionResponse> enrichedProducts = productIds.stream()
+                    .map(productMap::get)
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            log.debug("Found {} products with promotion for productIds", enrichedProducts.size());
+            log.debug("Found {} products with promotion for productIds (preserved order)", enrichedProducts.size());
             
             return enrichedProducts;
             
@@ -1041,7 +1046,7 @@ public class ProductServiceImpl implements ProductService {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, "No images provided");
             }
 
-            // 3. Check total image count limit
+            // 3. Check total image count limit (check against the current detail)
             long currentImageCount = productImageRepository.countByDetailId(detailId);
             if (currentImageCount + newImages.size() > 5) {
                 throw new ErrorException(HttpStatus.BAD_REQUEST,
@@ -1049,16 +1054,32 @@ public class ProductServiceImpl implements ProductService {
                                 newImages.size(), currentImageCount));
             }
 
-            // 4. Handle new images
-            handleProductDetailImages(productDetail, newImages);
+            // 4. Find all product details with the same product and color
+            List<ProductDetail> sameColorDetails = productDetailRepository.findByProductIdAndColorId(
+                    productDetail.getProduct().getId(),
+                    productDetail.getColor().getId()
+            );
 
-            // 5. Refresh product detail to get updated images
+            log.info("Found {} product details with same color (colorId={}) for product (productId={})",
+                    sameColorDetails.size(), productDetail.getColor().getId(), productDetail.getProduct().getId());
+
+            // 5. Upload images once and add to all product details with same color
+            List<Image> uploadedImages = uploadImages(productDetail, newImages);
+
+            // 6. Link uploaded images to all product details with same color
+            for (ProductDetail detail : sameColorDetails) {
+                linkImagesToProductDetail(detail, uploadedImages);
+            }
+
+            // 7. Refresh product detail to get updated images
             productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
 
-            log.info("Successfully added {} images for product detail ID: {}", newImages.size(), detailId);
+            log.info("Successfully added {} images for {} product details with same color", newImages.size(), sameColorDetails.size());
             return mapToProductDetailResponse(productDetail);
 
+        } catch (ErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error adding images for product detail ID {}: {}", detailId, e.getMessage(), e);
             throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error adding product detail images: " + e.getMessage());
@@ -1080,16 +1101,29 @@ public class ProductServiceImpl implements ProductService {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, "No image URLs provided for deletion");
             }
 
-            // 3. Delete specified images
-            deleteProductImages(productDetail, request.getImageUrls());
+            // 3. Find all product details with the same product and color
+            List<ProductDetail> sameColorDetails = productDetailRepository.findByProductIdAndColorId(
+                    productDetail.getProduct().getId(),
+                    productDetail.getColor().getId()
+            );
 
-            // 4. Refresh product detail to get updated images
+            log.info("Found {} product details with same color (colorId={}) for product (productId={})",
+                    sameColorDetails.size(), productDetail.getColor().getId(), productDetail.getProduct().getId());
+
+            // 4. Delete specified images from all product details with same color
+            for (ProductDetail detail : sameColorDetails) {
+                deleteProductImages(detail, request.getImageUrls());
+            }
+
+            // 5. Refresh product detail to get updated images
             productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
 
-            log.info("Successfully deleted {} images for product detail ID: {}", request.getImageUrls().size(), detailId);
+            log.info("Successfully deleted {} images for {} product details with same color", request.getImageUrls().size(), sameColorDetails.size());
             return mapToProductDetailResponse(productDetail);
 
+        } catch (ErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error deleting images for product detail ID {}: {}", detailId, e.getMessage(), e);
             throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error deleting product detail images: " + e.getMessage());
@@ -1098,44 +1132,46 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public void deleteProduct(Long id) {
-        log.info("Deleting product ID: {}", id);
+    public void toggleProductActive(Long id) {
+        log.info("Toggling product active status for ID: {}", id);
 
-        Product product = productMainRepository.findActiveProductById(id)
+        Product product = productMainRepository.findById(id)
             .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product not found with ID: " + id));
 
-        // Soft delete - set isActive = false
-        product.setIsActive(false);
+        // Toggle isActive status
+        boolean newStatus = !Boolean.TRUE.equals(product.getIsActive());
+        product.setIsActive(newStatus);
         product.setUpdatedAt(LocalDateTime.now());
 
-        // Also soft delete all product details
+        // Also toggle all product details to match
         if (product.getDetails() != null) {
             product.getDetails().forEach(detail -> {
-                detail.setIsActive(false);
+                detail.setIsActive(newStatus);
                 detail.setUpdatedAt(LocalDateTime.now());
             });
         }
 
         productMainRepository.save(product);
 
-        log.info("Successfully deleted product ID: {}", id);
+        log.info("Successfully toggled product ID: {} to isActive={}", id, newStatus);
     }
 
     @Override
     @Transactional
-    public void deleteProductDetail(Long id) {
-        log.info("Deleting product detail ID: {}", id);
+    public void toggleProductDetailActive(Long id) {
+        log.info("Toggling product detail active status for ID: {}", id);
 
-        ProductDetail product = productDetailRepository.findActiveProductDetailById(id)
+        ProductDetail productDetail = productDetailRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + id));
 
-        // Soft delete - set isActive = false
-        product.setIsActive(false);
-        product.setUpdatedAt(LocalDateTime.now());
+        // Toggle isActive status
+        boolean newStatus = !Boolean.TRUE.equals(productDetail.getIsActive());
+        productDetail.setIsActive(newStatus);
+        productDetail.setUpdatedAt(LocalDateTime.now());
 
-        productDetailRepository.save(product);
+        productDetailRepository.save(productDetail);
 
-        log.info("Successfully deleted product detail ID: {}", id);
+        log.info("Successfully toggled product detail ID: {} to isActive={}", id, newStatus);
     }
 
     @Override
@@ -1290,6 +1326,60 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * Upload images to Cloudinary and create Image entities
+     * @return List of uploaded Image entities
+     */
+    private List<Image> uploadImages(ProductDetail productDetail, List<MultipartFile> images) {
+        List<Image> uploadedImages = new ArrayList<>();
+
+        for (MultipartFile imageFile : images) {
+            try {
+                // Upload image to Cloudinary
+                String imageUrl = imageService.uploadImage(imageFile, "products");
+
+                // Create or find Image entity
+                Image image = imageRepository.findByUrl(imageUrl)
+                    .orElseGet(() -> {
+                        Image newImage = new Image();
+                        newImage.setUrl(imageUrl);
+                        newImage.setAlt(productDetail.getProduct().getTitle());
+                        newImage.setCreatedAt(LocalDateTime.now());
+                        return imageRepository.save(newImage);
+                    });
+
+                uploadedImages.add(image);
+
+            } catch (IOException e) {
+                log.error("Error uploading image for product detail {}: {}", productDetail.getId(), e.getMessage());
+                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Error uploading image: " + e.getMessage());
+            }
+        }
+
+        return uploadedImages;
+    }
+
+    /**
+     * Link existing Image entities to a ProductDetail
+     */
+    private void linkImagesToProductDetail(ProductDetail productDetail, List<Image> images) {
+        for (Image image : images) {
+            // Check if this image is already linked to this product detail
+            boolean alreadyLinked = productImageRepository.existsByDetailIdAndImageId(
+                    productDetail.getId(), image.getId());
+
+            if (!alreadyLinked) {
+                ProductImage productImage = new ProductImage();
+                productImage.setDetail(productDetail);
+                productImage.setImage(image);
+                productImage.setCreatedAt(LocalDateTime.now());
+                productImageRepository.save(productImage);
+                log.debug("Linked image {} to product detail {}", image.getId(), productDetail.getId());
+            } else {
+                log.debug("Image {} already linked to product detail {}", image.getId(), productDetail.getId());
+            }
+        }
+    }
 
     private void deleteProductImages(ProductDetail detail, List<String> imageUrls) {
         for (String imageUrl : imageUrls) {
@@ -1412,6 +1502,7 @@ public class ProductServiceImpl implements ProductService {
         response.setId(product.getId());
         response.setTitle(product.getTitle());
         response.setDescription(product.getDescription());
+        response.setIsActive(product.getIsActive());
         response.setCreatedAt(product.getCreatedAt());
         response.setUpdatedAt(product.getUpdatedAt());
 
@@ -1421,13 +1512,13 @@ public class ProductServiceImpl implements ProductService {
         }
 
         // Lấy thumbnail (ảnh đầu tiên của 1 màu bất kì) và detail ID tương ứng
-        String thumbnail = getThumbnailForProduct(product.getId());
+        String thumbnail = getThumbnailForProductAdmin(product.getId());
         response.setThumbnail(thumbnail);
         
-        Long currentDetailId = productRepository.findFirstDetailIdByProductId(product.getId());
+        Long currentDetailId = productRepository.findFirstDetailIdByProductIdForAdmin(product.getId());
         response.setCurrentDetailId(currentDetailId);
 
-        // Lấy danh sách màu active và inactive
+        // Lấy danh sách màu và size (bao gồm cả inactive cho admin)
         List<ColorResponse> variantColors = new ArrayList<>();
         List<SizeResponse> variantSizes = new ArrayList<>();
 
@@ -1436,19 +1527,17 @@ public class ProductServiceImpl implements ProductService {
             Map<Short, SizeResponse> sizeMap = new HashMap<>();
 
             for (ProductDetail detail : product.getDetails()) {
-                // Chỉ lấy các detail active
-                if (detail.getIsActive()) {
-                    // Lấy màu
-                    Color color = detail.getColor();
-                    if (!colorMap.containsKey(color.getId())) {
-                        colorMap.put(color.getId(), mapToColorResponse(color));
-                    }
+                // Lấy tất cả details (kể cả inactive) cho admin panel
+                // Lấy màu
+                Color color = detail.getColor();
+                if (!colorMap.containsKey(color.getId())) {
+                    colorMap.put(color.getId(), mapToColorResponse(color));
+                }
 
-                    // Lấy size
-                    Size size = detail.getSize();
-                    if (!sizeMap.containsKey(size.getId())) {
-                        sizeMap.put(size.getId(), mapToSizeResponse(size));
-                    }
+                // Lấy size
+                Size size = detail.getSize();
+                if (!sizeMap.containsKey(size.getId())) {
+                    sizeMap.put(size.getId(), mapToSizeResponse(size));
                 }
             }
 
@@ -1477,13 +1566,13 @@ public class ProductServiceImpl implements ProductService {
         return response;
     }
 
-    private String getThumbnailForProduct(Long productId) {
+    private String getThumbnailForProductAdmin(Long productId) {
         try {
-            // Lấy ảnh đầu tiên của product detail đầu tiên
-            List<String> imageUrls = productRepository.findFirstImageUrlByProductId(productId);
+            // Lấy ảnh đầu tiên của product detail đầu tiên (bao gồm cả inactive - cho admin)
+            List<String> imageUrls = productRepository.findFirstImageUrlByProductIdForAdmin(productId);
             return imageUrls.isEmpty() ? null : imageUrls.get(0);
         } catch (Exception e) {
-            log.warn("Error getting thumbnail for product {}: {}", productId, e.getMessage());
+            log.warn("Error getting thumbnail for product (admin) {}: {}", productId, e.getMessage());
             return null;
         }
     }
@@ -1495,8 +1584,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductSimpleResponse> getAllProductsSimple() {
-        log.info("Getting all products simple");
-        List<Product> products = productMainRepository.findAll();
+        log.info("Getting all active products simple");
+        List<Product> products = productMainRepository.findByIsActiveTrue();
         return products.stream()
                 .map(p -> ProductSimpleResponse.builder()
                         .id(p.getId())
@@ -1508,8 +1597,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductDetailSimpleResponse> getAllProductDetailsSimple() {
-        log.info("Getting all product details simple");
-        List<ProductDetail> details = productDetailRepository.findAll();
+        log.info("Getting all active product details simple");
+        List<ProductDetail> details = productDetailRepository.findByIsActiveTrue();
         return details.stream()
                 .map(d -> {
                     String name = d.getProduct().getTitle() + " - " + 

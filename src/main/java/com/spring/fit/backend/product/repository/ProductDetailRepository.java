@@ -116,6 +116,25 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
 
     @Query("SELECT COUNT(pd) > 0 FROM ProductDetail pd WHERE pd.id = :id AND pd.isActive = true AND pd.product.isActive = true")
     boolean existsActiveById(@Param("id") Long id);
+
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        LEFT JOIN FETCH pd.product p
+        LEFT JOIN FETCH pd.color
+        LEFT JOIN FETCH pd.size
+        WHERE pd.isActive = true AND p.isActive = true
+        """)
+    List<ProductDetail> findByIsActiveTrue();
+
+    /**
+     * Find all product details with the same product and color
+     * Used for syncing images across all sizes of the same color
+     */
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        WHERE pd.product.id = :productId AND pd.color.id = :colorId
+        """)
+    List<ProductDetail> findByProductIdAndColorId(@Param("productId") Long productId, @Param("colorId") Short colorId);
 }
 
 

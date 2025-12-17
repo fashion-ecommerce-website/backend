@@ -116,7 +116,7 @@ DELETE /api/admin/promotions/{id}/targets
 
 ## Validation Rules
 
-### 1. Promotion Request Validation
+### 1. Promotion Request Validation (Create)
 | Rule | Error Message |
 |------|---------------|
 | name required | `name is required` |
@@ -127,6 +127,7 @@ DELETE /api/admin/promotions/{id}/targets
 | PERCENT value ≤ 100 | `PERCENT value must be <= 100` |
 | startAt & endAt required | `startAt and endAt are required` |
 | endAt > startAt | `endAt must be after startAt` |
+| **startAt >= now** | `start_at cannot be in the past` |
 
 ### 2. Target Validation
 | Rule | Error Message |
@@ -145,6 +146,69 @@ in the specified time period. Please deactivate the existing promotion first.
 Cannot activate promotion: SKU ID {skuId} already has an active promotion 
 (Promotion ID: {conflictingPromotionId}) in the time period {startAt} to {endAt}. 
 Please deactivate the conflicting promotion first.
+```
+
+---
+
+## Time-based Update Restrictions
+
+### Quy tắc theo thời gian:
+
+```
+Timeline:  ──────────────────────────────────────────────────────▶
+                    │                      │
+           now      │      start_at        │       end_at
+                    │                      │
+  ┌─────────────────┴──────────────────────┴─────────────────────┐
+  │                                                               │
+  │  CASE 1: now < start_at (Chưa bắt đầu)                       │
+  │  ┌───────────────────────────────────────────────────────┐   │
+  │  │ ✅ Có thể sửa TẤT CẢ các trường                        │   │
+  │  │ ✅ Có thể thêm/xóa targets                              │   │
+  │  └───────────────────────────────────────────────────────┘   │
+  │                                                               │
+  │  CASE 2: start_at ≤ now ≤ end_at (Đang hoạt động)            │
+  │  ┌───────────────────────────────────────────────────────┐   │
+  │  │ ❌ KHÔNG cho phép update promotion                      │   │
+  │  │ ❌ KHÔNG cho phép thêm/xóa targets                      │   │
+  │  └───────────────────────────────────────────────────────┘   │
+  │                                                               │
+  │  CASE 3: now > end_at (Đã hết hạn)                           │
+  │  ┌───────────────────────────────────────────────────────┐   │
+  │  │ ❌ KHÔNG cho phép update promotion                      │   │
+  │  └───────────────────────────────────────────────────────┘   │
+  │                                                               │
+  └───────────────────────────────────────────────────────────────┘
+```
+
+**Source:** `PromotionServiceImpl.java` - method `validatePromotionNotStarted()`
+
+---
+
+## Automatic Expiration (Cronjob)
+
+### PromotionExpirationScheduler
+
+Hệ thống tự động deactivate các promotion đã hết hạn mỗi đêm.
+
+```java
+@Scheduled(cron = "0 10 0 * * *")  // Chạy lúc 00:10 AM mỗi ngày
+@Transactional
+public void deactivateExpiredPromotions() {
+    // 1. Đếm số promotion hết hạn (isActive = true AND endAt < now)
+    // 2. Update tất cả: SET isActive = false
+    // 3. Log kết quả
+}
+```
+
+**Repository Methods:**
+```java
+// Đếm promotion hết hạn nhưng vẫn active
+long countExpiredActivePromotions(LocalDateTime now);
+
+// Deactivate tất cả promotion hết hạn
+@Modifying
+int deactivateExpiredPromotions(LocalDateTime now);
 ```
 
 ---
@@ -225,7 +289,7 @@ if (promotion.getType() == PromotionType.PERCENT) {
 } else { // FIXED
     discount = value;
 }
-finalPrice = max(basePrice - discount, 0);
+finalPrice = max(basePrice - discount, 0);  // Không cho âm
 ```
 
 ---
@@ -275,6 +339,8 @@ finalPrice = max(basePrice - discount, 0);
 | Deactivate promotion SKU 1 → Tạo promotion Category | ✅ OK |
 | Toggle inactive→active (có SKU conflict) | ❌ Conflict |
 | Toggle active→inactive | ✅ Luôn OK |
+| Update promotion đang active | ❌ Không cho phép |
+| Update promotion đã hết hạn | ❌ Không cho phép |
 
 ---
 
@@ -301,8 +367,10 @@ promotion/
 │       ├── PromotionTarget.java
 │       └── PromotionTargetId.java
 ├── repository/
-│   ├── PromotionRepository.java
+│   ├── PromotionRepository.java                # Có deactivateExpiredPromotions()
 │   └── PromotionTargetRepository.java          # Conflict detection queries
+├── scheduler/
+│   └── PromotionExpirationScheduler.java       # Cronjob deactivate expired
 └── service/
     ├── PromotionService.java
     └── impl/
@@ -337,3 +405,28 @@ boolean existsActiveById(Long id);
 boolean existsActiveById(Long id);
 ```
 
+### PromotionRepository
+```java
+// Đếm promotion hết hạn nhưng vẫn active
+long countExpiredActivePromotions(LocalDateTime now);
+
+// Deactivate tất cả promotion hết hạn
+@Modifying
+int deactivateExpiredPromotions(LocalDateTime now);
+```
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | - | Initial documentation |
+| 1.1 | 2024-12-14 | Add: `start_at >= now` validation for create |
+| 1.2 | 2024-12-14 | Add: Time-based update restrictions |
+| 1.3 | 2024-12-14 | Add: Cronjob deactivate expired promotions |
+| 1.4 | 2024-12-14 | Add: Discount cannot be negative (finalPrice >= 0) |
+
+---
+
+> **Note:** Tài liệu này được cập nhật dựa trên source code. Vui lòng cập nhật khi có thay đổi logic.

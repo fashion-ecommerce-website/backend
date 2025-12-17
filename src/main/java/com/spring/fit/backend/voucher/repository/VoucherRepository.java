@@ -35,6 +35,20 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
 
     @Query("SELECT v FROM Voucher v WHERE LOWER(v.code) LIKE LOWER(CONCAT('%', :searchCode, '%')) AND v.isActive = true")
     List<Voucher> findByCodeContainingIgnoreCase(@Param("searchCode") String searchCode);
+
+    @Query("SELECT v FROM Voucher v WHERE v.isActive = true AND v.endAt >= :now ORDER BY v.startAt ASC")
+    List<Voucher> findActiveVouchersNotExpired(@Param("now") LocalDateTime now);
+    
+    @Query("SELECT v FROM Voucher v WHERE LOWER(v.code) LIKE LOWER(CONCAT('%', :searchCode, '%')) " +
+           "AND v.isActive = true AND v.endAt >= :now ORDER BY v.startAt ASC")
+    List<Voucher> findActiveVouchersByCodeContaining(@Param("searchCode") String searchCode, @Param("now") LocalDateTime now);
+
+    @Query("SELECT COUNT(v) FROM Voucher v WHERE v.isActive = true AND v.endAt < :now")
+    long countExpiredActiveVouchers(@Param("now") LocalDateTime now);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Voucher v SET v.isActive = false WHERE v.isActive = true AND v.endAt < :now")
+    int deactivateExpiredVouchers(@Param("now") LocalDateTime now);
 }
 
 
