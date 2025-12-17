@@ -1,5 +1,6 @@
 package com.spring.fit.backend.user.service;
 
+import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.user.domain.dto.request.UpdateUserRequest;
@@ -14,7 +15,7 @@ public interface UserService {
 
     UserResponse getCurrentUser(String email);
     
-    List<UserResponse> getAllUsers();
+    PageResult<UserResponse> getAllUsers(int page, int pageSize);
     
     UserResponse updateUserStatus(UpdateUserStatusRequest request);
     

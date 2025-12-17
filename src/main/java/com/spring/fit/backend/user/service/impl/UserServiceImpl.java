@@ -8,10 +8,15 @@ import java.time.LocalDate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.product.service.ProductService;
 import com.spring.fit.backend.user.service.RecentViewService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,14 +93,18 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserResponse> getAllUsers() {
-        log.info("Inside UserServiceImpl.getAllUsers");
-        List<UserEntity> users = userRepository.findAll();
-        List<UserResponse> userResponses = users.stream()
-                .map(UserResponse::fromEntity)
-                .toList();
-        log.info("Inside UserServiceImpl.getAllUsers success count={}", userResponses.size());
-        return userResponses;
+    public PageResult<UserResponse> getAllUsers(int page, int pageSize) {
+        log.info("Inside UserServiceImpl.getAllUsers page={}, pageSize={}", page, pageSize);
+        
+        Pageable pageable = PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<UserEntity> userPage = userRepository.findAll(pageable);
+        
+        Page<UserResponse> responsePage = userPage.map(UserResponse::fromEntity);
+        
+        PageResult<UserResponse> result = PageResult.from(responsePage);
+        log.info("Inside UserServiceImpl.getAllUsers success totalItems={}, totalPages={}", 
+                result.totalItems(), result.totalPages());
+        return result;
     }
 
     @Override
