@@ -33,7 +33,8 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
 
     @Query("""
         SELECT DISTINCT p FROM Product p
-        LEFT JOIN FETCH p.categories
+        LEFT JOIN FETCH p.categories c
+        LEFT JOIN FETCH c.parent
         LEFT JOIN FETCH p.details d
         LEFT JOIN FETCH d.color
         LEFT JOIN FETCH d.size
