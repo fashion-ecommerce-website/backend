@@ -10,10 +10,14 @@ import com.spring.fit.backend.payment.domain.dto.PaymentDtos.RefundResponse;
 import com.spring.fit.backend.payment.domain.entity.Payment;
 import com.spring.fit.backend.payment.repository.PaymentRepository;
 import com.spring.fit.backend.payment.service.PaymentService;
+import com.spring.fit.backend.product.domain.entity.Image;
+import com.spring.fit.backend.product.repository.ImageRepository;
 import com.spring.fit.backend.refund.domain.dto.RefundDtos.CreateRefundRequest;
 import com.spring.fit.backend.refund.domain.dto.RefundDtos.RefundRequestResponse;
 import com.spring.fit.backend.refund.domain.dto.RefundDtos.UpdateRefundStatusRequest;
+import com.spring.fit.backend.refund.domain.entity.RefundImage;
 import com.spring.fit.backend.refund.domain.entity.RefundRequest;
+import com.spring.fit.backend.refund.repository.RefundImageRepository;
 import com.spring.fit.backend.refund.repository.RefundRequestRepository;
 import com.spring.fit.backend.refund.service.RefundRequestService;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
@@ -28,6 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,10 +43,12 @@ import java.time.LocalDateTime;
 public class RefundRequestServiceImpl implements RefundRequestService {
 
     private final RefundRequestRepository refundRequestRepository;
+    private final RefundImageRepository refundImageRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentService paymentService;
+    private final ImageRepository imageRepository; // SỬA: Inject ImageRepository
 
     @Override
     public RefundRequestResponse createRefundRequest(Long userId, CreateRefundRequest request) {
@@ -60,14 +69,14 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
         // Validate order payment status
         if (order.getPaymentStatus() != PaymentStatus.PAID) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+            throw new ErrorException(HttpStatus.BAD_REQUEST,
                 "Cannot request refund for order with payment status: " + order.getPaymentStatus());
         }
 
         // Check if there's already a pending refund request for this order
         refundRequestRepository.findByOrderIdAndStatus(request.getOrderId(), RefundStatus.PENDING)
                 .ifPresent(existing -> {
-                    throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                    throw new ErrorException(HttpStatus.BAD_REQUEST,
                         "There is already a pending refund request for this order");
                 });
 
@@ -79,7 +88,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
         // Validate refund amount doesn't exceed order total
         if (refundAmount.compareTo(order.getTotalAmount()) > 0) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+            throw new ErrorException(HttpStatus.BAD_REQUEST,
                 "Refund amount cannot exceed order total amount");
         }
 
@@ -94,6 +103,33 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         log.info("Created refund request with id: {}", saved.getId());
+
+        // Save images if provided
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            log.info("Saving {} images for refund request {}", request.getImageUrls().size(), saved.getId());
+
+            for (String imageUrl : request.getImageUrls()) {
+                // SỬA: Tạo và lưu Image trước
+                Image image = new Image();
+                image.setUrl(imageUrl);
+                image.setAlt("Refund request image");
+                image.setCreatedAt(LocalDateTime.now());
+                Image savedImage = imageRepository.save(image); // Lưu Image vào DB
+
+                // Create RefundImage entity
+                RefundImage refundImage = RefundImage.builder()
+                        .refundRequest(saved)
+                        .image(savedImage) // Gán Image đã được lưu
+                        .createdAt(LocalDateTime.now())
+                        .build();
+
+                saved.addRefundImage(refundImage);
+            }
+
+            // Save again to persist images
+            saved = refundRequestRepository.save(saved);
+            log.info("Saved {} images for refund request {}", saved.getRefundImages().size(), saved.getId());
+        }
 
         return mapToResponse(saved);
     }
@@ -111,7 +147,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
     @Transactional(readOnly = true)
     public Page<RefundRequestResponse> getUserRefundRequests(Long userId, RefundStatus status, Pageable pageable) {
         log.info("Getting refund requests for user {} with status {}", userId, status);
-        
+
         Page<RefundRequest> refundRequests;
         if (status != null) {
             refundRequests = refundRequestRepository.findByUserIdAndStatus(userId, status, pageable);
@@ -126,7 +162,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
     @Transactional(readOnly = true)
     public Page<RefundRequestResponse> getAllRefundRequests(RefundStatus status, Pageable pageable) {
         log.info("Getting all refund requests with status {}", status);
-        
+
         Page<RefundRequest> refundRequests;
         if (status != null) {
             refundRequests = refundRequestRepository.findByStatus(status, pageable);
@@ -139,7 +175,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
     @Override
     public RefundRequestResponse updateRefundStatus(Long refundRequestId, Long adminUserId, UpdateRefundStatusRequest request) {
-        log.info("Updating refund request {} status to {} by admin {}", 
+        log.info("Updating refund request {} status to {} by admin {}",
             refundRequestId, request.getStatus(), adminUserId);
 
         // Validate admin user
@@ -152,14 +188,14 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
         // Validate current status
         if (refundRequest.getStatus() != RefundStatus.PENDING) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+            throw new ErrorException(HttpStatus.BAD_REQUEST,
                 "Cannot update refund request that is not in PENDING status. Current status: " + refundRequest.getStatus());
         }
 
         // Validate new status
         RefundStatus newStatus = request.getStatus();
         if (newStatus != RefundStatus.APPROVED && newStatus != RefundStatus.REJECTED) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+            throw new ErrorException(HttpStatus.BAD_REQUEST,
                 "Can only approve or reject refund requests. Status must be APPROVED or REJECTED");
         }
 
@@ -174,7 +210,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
             try {
                 // Get the payment for this order
                 Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(refundRequest.getOrder().getId())
-                        .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
+                        .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
                             "Payment not found for order id: " + refundRequest.getOrder().getId()));
 
                 // Create payment refund request
@@ -189,17 +225,17 @@ public class RefundRequestServiceImpl implements RefundRequestService {
 
                 // Update refund request with stripe refund id
                 refundRequest.setStripeRefundId(refundResponse.getRefundId());
-                
+
                 // Mark as completed
                 refundRequest.setStatus(RefundStatus.COMPLETED);
 
-                log.info("Successfully processed refund for refund request {} with Stripe refund id: {}", 
+                log.info("Successfully processed refund for refund request {} with Stripe refund id: {}",
                     refundRequestId, refundResponse.getRefundId());
             } catch (Exception e) {
                 log.error("Failed to process refund for refund request {}: {}", refundRequestId, e.getMessage(), e);
                 // Keep status as APPROVED but don't mark as COMPLETED
                 // Admin can retry later if needed
-                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, 
+                throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to process refund payment: " + e.getMessage());
             }
         }
@@ -211,6 +247,14 @@ public class RefundRequestServiceImpl implements RefundRequestService {
     }
 
     private RefundRequestResponse mapToResponse(RefundRequest refundRequest) {
+        // Get image URLs
+        List<String> imageUrls = new ArrayList<>();
+        if (refundRequest.getRefundImages() != null && !refundRequest.getRefundImages().isEmpty()) {
+            imageUrls = refundRequest.getRefundImages().stream()
+                    .map(ri -> ri.getImage().getUrl())
+                    .collect(Collectors.toList());
+        }
+
         return RefundRequestResponse.builder()
                 .id(refundRequest.getId())
                 .orderId(refundRequest.getOrder().getId())
@@ -225,7 +269,7 @@ public class RefundRequestServiceImpl implements RefundRequestService {
                 .stripeRefundId(refundRequest.getStripeRefundId())
                 .createdAt(refundRequest.getCreatedAt())
                 .updatedAt(refundRequest.getUpdatedAt())
+                .imageUrls(imageUrls)
                 .build();
     }
 }
-

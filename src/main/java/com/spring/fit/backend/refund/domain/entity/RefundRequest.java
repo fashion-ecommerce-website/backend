@@ -14,6 +14,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "refund_requests", indexes = {
@@ -72,6 +74,22 @@ public class RefundRequest {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "refundRequest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<RefundImage> refundImages = new ArrayList<>();
+
+    // Helper method to add image
+    public void addRefundImage(RefundImage refundImage) {
+        refundImages.add(refundImage);
+        refundImage.setRefundRequest(this);
+    }
+
+    // Helper method to remove image
+    public void removeRefundImage(RefundImage refundImage) {
+        refundImages.remove(refundImage);
+        refundImage.setRefundRequest(null);
+    }
 }
 
 

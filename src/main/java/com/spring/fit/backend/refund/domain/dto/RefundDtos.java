@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class RefundDtos {
 
@@ -23,6 +24,7 @@ public class RefundDtos {
         private Long orderId;
         private String reason;
         private BigDecimal refundAmount; // Optional, if null will use order total
+        private List<String> imageUrls; // List of image URLs from Cloudinary
     }
 
     @Data
@@ -43,6 +45,7 @@ public class RefundDtos {
         private String stripeRefundId;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        private List<String> imageUrls; // List of image URLs
     }
 
     @Data
