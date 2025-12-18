@@ -30,7 +30,12 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     @Query("SELECT r FROM RefundRequest r WHERE r.status = :status")
     Page<RefundRequest> findAllByStatus(@Param("status") RefundStatus status, Pageable pageable);
 
-    @Query("SELECT r FROM RefundRequest r JOIN FETCH r.order JOIN FETCH r.user WHERE r.id = :id")
+    @Query("SELECT r FROM RefundRequest r " +
+           "JOIN FETCH r.order " +
+           "JOIN FETCH r.user " +
+           "LEFT JOIN FETCH r.refundImages ri " +
+           "LEFT JOIN FETCH ri.image " +
+           "WHERE r.id = :id")
     Optional<RefundRequest> findByIdWithRelations(@Param("id") Long id);
 }
 
