@@ -33,12 +33,6 @@ public class ShipmentServiceImpl implements ShipmentService {
     public Shipment createShipmentForOrder(Order order, String carrier) {
         log.info("Creating shipment for order {} with carrier {}", order.getId(), carrier);
 
-        // Validate order can be shipped
-        if (order.getPaymentStatus() != PaymentStatus.PAID) {
-            throw new ErrorException(HttpStatus.BAD_REQUEST, 
-                "Order must be paid before creating shipment");
-        }
-
         // Check if shipment already exists
         if (!shipmentRepository.findByOrderId(order.getId()).isEmpty()) {
             log.warn("Shipment already exists for order {}", order.getId());
