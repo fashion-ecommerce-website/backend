@@ -233,7 +233,6 @@ public class RefundRequestServiceImpl implements RefundRequestService {
                     refundRequestId, refundResponse.getRefundId());
             } catch (Exception e) {
                 log.error("Failed to process refund for refund request {}: {}", refundRequestId, e.getMessage(), e);
-                // Keep status as APPROVED but don't mark as COMPLETED
                 // Admin can retry later if needed
                 throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to process refund payment: " + e.getMessage());

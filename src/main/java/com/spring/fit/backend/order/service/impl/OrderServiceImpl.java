@@ -3,13 +3,16 @@ package com.spring.fit.backend.order.service.impl;
 import com.spring.fit.backend.common.enums.FulfillmentStatus;
 import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
+import com.spring.fit.backend.order.service.InventoryService;
+import com.spring.fit.backend.order.service.ShipmentService;
+import com.spring.fit.backend.voucher.domain.dto.VoucherValidateRequest;
+import com.spring.fit.backend.voucher.service.VoucherService;
 import org.springframework.http.HttpStatus;
 import com.spring.fit.backend.order.domain.dto.request.CreateOrderRequest;
 import com.spring.fit.backend.order.domain.dto.request.UpdateOrderRequest;
 import com.spring.fit.backend.order.domain.dto.response.OrderResponse;
 import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.order.domain.entity.OrderDetail;
-import com.spring.fit.backend.order.domain.entity.Shipment;
 import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.order.service.OrderService;
 import com.spring.fit.backend.payment.domain.entity.Payment;
@@ -18,7 +21,6 @@ import com.spring.fit.backend.product.repository.ProductImageRepository;
 import com.spring.fit.backend.promotion.domain.entity.OrderDetailPromotion;
 import com.spring.fit.backend.promotion.repository.OrderDetailPromotionRepository;
 import com.spring.fit.backend.security.repository.UserRepository;
-import com.spring.fit.backend.user.domain.entity.AddressEntity;
 import com.spring.fit.backend.user.repository.AddressRepository;
 import com.spring.fit.backend.voucher.domain.entity.Voucher;
 import com.spring.fit.backend.voucher.repository.VoucherRepository;
@@ -51,6 +53,9 @@ public class OrderServiceImpl implements OrderService {
     private final ProductImageRepository productImageRepository;
     private final VoucherRepository voucherRepository;
     private final OrderDetailPromotionRepository orderDetailPromotionRepository;
+    private final ShipmentService shipmentService;
+    private final VoucherService voucherService;
+    private final InventoryService inventoryService;
 
     @Override
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
@@ -103,7 +108,7 @@ public class OrderServiceImpl implements OrderService {
                 .totalAmount(BigDecimal.valueOf(request.getTotalAmount()))
                 .status(FulfillmentStatus.UNFULFILLED)
                 .paymentStatus(PaymentStatus.UNPAID)
-                .voucher(voucher != null ? voucher : null)
+                .voucher(voucher)
                 .build();
 
         // Create order details and update stock
@@ -122,7 +127,7 @@ public class OrderServiceImpl implements OrderService {
                         "). Requested: " + requestedQuantity + ", Available: " + currentStock);
             }
 
-            // Trừ tồn kho
+            // subtract quantity from stock
             productDetail.setQuantity(currentStock - requestedQuantity);
             productDetailRepository.save(productDetail);
 
@@ -155,8 +160,26 @@ public class OrderServiceImpl implements OrderService {
 
         // Save order
         var savedOrder = orderRepository.save(order);
+        if (voucher != null) {
+            try {
+                voucherService.applyVoucher(VoucherValidateRequest.builder()
+                        .code(voucher.getCode())
+                        .subtotal(order.getSubtotalAmount().doubleValue())
+                        .build(), order.getUser().getId(), order.getId());
+            } catch (Exception e) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+
+        }
         log.info("Inside OrderServiceImpl.createOrder created successfully with id: {}", savedOrder.getId());
 
+        // 4: Create shipment with tracking after payment success
+        try {
+            shipmentService.createShipmentForOrder(order, null); // null = use default carrier
+            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Shipment created for order: {}", order);
+        } catch (Exception e) {
+            log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create shipment for order {}: {}", order, e.getMessage());
+        }
         return mapToResponse(savedOrder);
     }
 
@@ -301,7 +324,7 @@ public class OrderServiceImpl implements OrderService {
                 .collect(Collectors.toMap(
                         odp -> odp.getDetail().getId(),
                         odp -> odp,
-                        (existing, replacement) -> existing // If duplicate, keep first
+                        (existing, replacement) -> existing
                 ));
 
         // Collect all productDetailIds
@@ -311,7 +334,6 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
 
         // Load all images for these productDetailIds in one query
-        // Group by detailId to get list of images for each detailId
         Map<Long, List<String>> imagesMap = Map.of(); // Initialize empty map
         if (!productDetailIds.isEmpty()) {
             List<Object[]> imageResults = productImageRepository.findAllImageUrlsByDetailIds(productDetailIds);
@@ -336,7 +358,7 @@ public class OrderServiceImpl implements OrderService {
                     BigDecimal unitPrice = detail.getUnitPrice();
                     BigDecimal totalPrice = detail.getTotalPrice();
                     BigDecimal finalPrice;
-                    Integer percentOff;
+                    int percentOff;
                     Long promotionId;
                     String promotionName;
 
@@ -422,6 +444,69 @@ public class OrderServiceImpl implements OrderService {
                         .createdAt(shipment.getCreatedAt())
                         .build())
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse cancelOrder(Long orderId, Long userId) {
+        log.info("Cancelling order {} for user {}", orderId, userId);
+        
+        // Get order with all relations
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
+                        "Order not found with id: " + orderId));
+        
+        // Verify order belongs to user
+        if (!order.getUser().getId().equals(userId)) {
+            throw new ErrorException(HttpStatus.FORBIDDEN, 
+                    "Order does not belong to user");
+        }
+        
+        // Check if order can be cancelled
+        PaymentStatus currentPaymentStatus = order.getPaymentStatus();
+        if (currentPaymentStatus == PaymentStatus.PAID) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                    "Cannot cancel order with PAID status. Please create a refund request instead.");
+        }
+        
+        if (currentPaymentStatus == PaymentStatus.REFUNDED) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                    "Cannot cancel order with REFUNDED status.");
+        }
+        
+        // Only restore stock if not already cancelled
+        if (currentPaymentStatus != PaymentStatus.CANCELLED) {
+            log.info("Restoring stock for cancelled order: {}", orderId);
+            inventoryService.restoreStockForOrder(order);
+            log.info("Successfully restored stock for order: {}", orderId);
+        } else {
+            log.info("Order {} already cancelled, skipping stock restoration", orderId);
+        }
+        
+        // Update order status
+        order.setPaymentStatus(PaymentStatus.CANCELLED);
+        order.setStatus(FulfillmentStatus.CANCELLED);
+        
+        // Cancel voucher usage if any
+        try {
+            voucherService.cancelVoucherUsageByOrderId(orderId);
+        } catch (Exception e) {
+            log.warn("Failed to cancel voucher usage for order {}: {}", orderId, e.getMessage());
+        }
+        
+        // Update payment status
+        Payment payment = order.getPayments().stream()
+                .findFirst()
+                .orElse(null);
+        
+        if (payment != null) {
+            payment.setStatus(PaymentStatus.CANCELLED);
+        }
+        
+        Order savedOrder = orderRepository.save(order);
+        log.info("Successfully cancelled order: {}", orderId);
+        
+        return mapToResponse(savedOrder);
     }
 
 
