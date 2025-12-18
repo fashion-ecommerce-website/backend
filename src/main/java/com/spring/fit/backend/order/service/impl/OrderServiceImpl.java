@@ -9,6 +9,7 @@ import com.spring.fit.backend.order.domain.dto.request.UpdateOrderRequest;
 import com.spring.fit.backend.order.domain.dto.response.OrderResponse;
 import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.order.domain.entity.OrderDetail;
+import com.spring.fit.backend.order.domain.entity.Shipment;
 import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.order.service.OrderService;
 import com.spring.fit.backend.payment.domain.entity.Payment;
@@ -80,14 +81,14 @@ public class OrderServiceImpl implements OrderService {
             );
 
             if (maybeVoucher.isEmpty()) {
-                log.warn("Inside OrderServiceImpl.createOrder, voucherCode {} not valid for subtotal {} at {}", 
+                log.warn("Inside OrderServiceImpl.createOrder, voucherCode {} not valid for subtotal {} at {}",
                         request.getVoucherCode(), request.getSubtotalAmount(), now);
                 throw new ErrorException(HttpStatus.BAD_REQUEST,
                         "Invalid or expired voucher code: " + request.getVoucherCode());
             }
 
             voucher = maybeVoucher.get();
-            log.info("Inside OrderServiceImpl.createOrder, resolved voucher id={} code={}", 
+            log.info("Inside OrderServiceImpl.createOrder, resolved voucher id={} code={}",
                     voucher.getId(), voucher.getCode());
         }
 
@@ -105,11 +106,25 @@ public class OrderServiceImpl implements OrderService {
                 .voucher(voucher != null ? voucher : null)
                 .build();
 
-        // Create order details
+        // Create order details and update stock
         for (var detailRequest : request.getOrderDetails()) {
             var productDetail = productDetailRepository.findById(detailRequest.getProductDetailId())
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
                             "Inside OrderServiceImpl.createOrder, product detail not found with id: " + detailRequest.getProductDetailId()));
+
+            int requestedQuantity = detailRequest.getQuantity();
+            int currentStock = productDetail.getQuantity();
+
+            if (currentStock < requestedQuantity) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST,
+                        "Not enough stock for product: " + productDetail.getProduct().getTitle() +
+                        " (Size: " + productDetail.getSize().getLabel() + ", Color: " + productDetail.getColor().getName() +
+                        "). Requested: " + requestedQuantity + ", Available: " + currentStock);
+            }
+
+            // Trừ tồn kho
+            productDetail.setQuantity(currentStock - requestedQuantity);
+            productDetailRepository.save(productDetail);
 
             // Get promotion ID if provided
             Long promotionId = detailRequest.getPromotionId();
@@ -120,7 +135,7 @@ public class OrderServiceImpl implements OrderService {
                     .title(productDetail.getProduct().getTitle())
                     .colorLabel(productDetail.getColor().getName())
                     .sizeLabel(productDetail.getSize().getLabel())
-                    .quantity(detailRequest.getQuantity())
+                    .quantity(requestedQuantity)
                     .unitPrice(productDetail.getPrice())
                     .promotionId(promotionId)
                     .build();
@@ -373,7 +388,7 @@ public class OrderServiceImpl implements OrderService {
                             .promotionId(promotionId)
                             .promotionName(promotionName)
                             .totalPrice(totalPrice)
-                            .images(images) 
+                            .images(images)
                             .build();
                 })
                 .toList();
