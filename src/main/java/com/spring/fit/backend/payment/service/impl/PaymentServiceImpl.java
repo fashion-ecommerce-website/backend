@@ -31,12 +31,14 @@ import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyRespon
 import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
 import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
+import com.spring.fit.backend.user.event.PaymentSuccessEvent;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +62,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final StripeHelper stripeHelper;
     private final ShipmentService shipmentService;
     private final InventoryService inventoryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -73,18 +76,7 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside PaymentServiceImpl.createCheckoutSessionFromContext, payment not found with id: " + paymentId));
 
-        // 2. VOUCHER VALIDATION
-        if(payment.getOrder().getVoucher() != null) {
-            VoucherValidateResponse voucherResponse = voucherService.validateVoucher(VoucherValidateRequest.builder()
-                    .code(payment.getOrder().getVoucher().getCode())
-                    .subtotal(payment.getOrder().getSubtotalAmount().doubleValue())
-                    .build(), payment.getOrder().getUser().getId());
-            if(!voucherResponse.isValid()) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, voucherResponse.getMessage());
-            }
-        }
-        
-        // 3. ORDER DATA EXTRACTION
+        // 2. ORDER DATA EXTRACTION
         var rows = paymentRepository.findOrderAndItemsByPaymentId(paymentId);
         if (rows.isEmpty()) {
             throw new ErrorException(HttpStatus.NOT_FOUND, "Order items not found for payment");
@@ -100,7 +92,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Inside PaymentServiceImpl.createCheckoutSessionFromContext, Total amount: {}, Discount amount: {} , Shipping fee: {}", 
         totalAmount, discountAmount, shippingFee);
 
-        // 4. URL CONFIGURATION
+        // 3. URL CONFIGURATION
         String successUrl = request.getSuccessUrl();
         String cancelUrl = request.getCancelUrl();
         
@@ -120,7 +112,7 @@ public class PaymentServiceImpl implements PaymentService {
             cancelUrl = "http://localhost:3000/payment/cancel";
         }
 
-        // 5. STRIPE SESSION CREATION
+        // 4. STRIPE SESSION CREATION
         try {
             // Initialize Stripe session parameters
             SessionCreateParams.Builder paramsBuilder = SessionCreateParams.builder()
@@ -148,8 +140,6 @@ public class PaymentServiceImpl implements PaymentService {
                 // Create product data for Stripe
                 SessionCreateParams.LineItem.PriceData.ProductData productData = SessionCreateParams.LineItem.PriceData.ProductData
                         .builder().setName(name).build();
-
-                // Convert price to smallest currency unit (no decimals for VND)
 
                 var applyReq = PromotionApplyRequest.builder()
                 .skuId(detailId)
@@ -368,6 +358,14 @@ public class PaymentServiceImpl implements PaymentService {
             }
             
             orderRepository.save(order);
+            
+            // Publish payment success event for user ranking
+            eventPublisher.publishEvent(new PaymentSuccessEvent(
+                    order.getUser().getId(), 
+                    orderId, 
+                    order.getTotalAmount()));
+            log.info("Published PaymentSuccessEvent for user: {}, order: {}, amount: {}", 
+                    order.getUser().getId(), orderId, order.getTotalAmount());
             
             // Send order confirmation email to user (non-blocking)
             orderEmailService.sendOrderDetailsEmail(order);
