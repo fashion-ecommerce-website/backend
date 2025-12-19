@@ -102,46 +102,30 @@ public class ProductServiceImpl implements ProductService {
                     filterParams.sizesEmpty(), 
                     sortParams.field(), 
                     sortParams.direction(), 
+                    LocalDateTime.now(),
                     pageable
             );
             
             log.debug("Query completed: found {} total items, returned {} items", 
                     pageResult.getTotalElements(), pageResult.getContent().size());
             
-            // Map thêm giá sau khuyến mãi cho từng SKU
+            // Map trực tiếp từ query result (đã bao gồm promotion info)
             List<ProductCardWithPromotionResponse> items = pageResult.getContent().stream()
-                .map(card -> {
-                    var applyRes = PromotionApplyResponse.builder().build();
-                    try {
-                        var applyReq = PromotionApplyRequest.builder()
-                                .skuId(card.getDetailId())
-                                .basePrice(card.getPrice())
-                                .build();
-                        applyRes = promotionService.applyPromotionForSku(applyReq);
-                    } catch (Exception ex) {
-                        // fallback giữ nguyên giá nếu có lỗi
-                        applyRes = PromotionApplyResponse.builder()
-                                .basePrice(card.getPrice())
-                                .finalPrice(card.getPrice())
-                                .percentOff(0)
-                                .build();
-                    }
-                    return ProductCardWithPromotionResponse.builder()
-                            .productId(card.getProductId())
-                            .detailId(card.getDetailId())
-                            .productTitle(card.getProductTitle())
-                            .productSlug(card.getProductSlug())
-                            .colorName(card.getColorName())
-                            .price(card.getPrice())
-                            .finalPrice(applyRes.getFinalPrice())
-                            .percentOff(applyRes.getPercentOff())
-                            .promotionId(applyRes.getPromotionId())
-                            .promotionName(applyRes.getPromotionName())
-                            .quantity(card.getQuantity())
-                            .colors(card.getColors())
-                            .imageUrls(card.getImageUrls())
-                            .build();
-                })
+                .map(card -> ProductCardWithPromotionResponse.builder()
+                        .productId(card.getProductId())
+                        .detailId(card.getDetailId())
+                        .productTitle(card.getProductTitle())
+                        .productSlug(card.getProductSlug())
+                        .colorName(card.getColorName())
+                        .price(card.getPrice())
+                        .finalPrice(card.getFinalPrice() != null ? card.getFinalPrice() : card.getPrice())
+                        .percentOff(card.getPercentOff() != null ? card.getPercentOff() : 0)
+                        .promotionId(card.getPromotionId())
+                        .promotionName(card.getPromotionName())
+                        .quantity(card.getQuantity())
+                        .colors(card.getColors())
+                        .imageUrls(card.getImageUrls())
+                        .build())
                 .toList();
 
             return new PageResult<>(
@@ -206,41 +190,23 @@ public class ProductServiceImpl implements ProductService {
             log.debug("Query completed: found {} total discounted items, returned {} items",
                     pageResult.getTotalElements(), pageResult.getContent().size());
 
-            // Map thêm thông tin promotion chi tiết cho từng SKU
+            // Map trực tiếp từ query result (đã bao gồm promotion info)
             List<ProductCardWithPromotionResponse> items = pageResult.getContent().stream()
-                    .map(card -> {
-                        var applyRes = PromotionApplyResponse.builder().build();
-                        try {
-                            var applyReq = PromotionApplyRequest.builder()
-                                    .skuId(card.getDetailId())
-                                    .basePrice(card.getPrice())
-                                    .build();
-                            applyRes = promotionService.applyPromotionForSku(applyReq);
-                        } catch (Exception ex) {
-                            // fallback giữ nguyên giá nếu có lỗi
-                            log.warn("Error applying promotion for detailId {}: {}", card.getDetailId(), ex.getMessage());
-                            applyRes = PromotionApplyResponse.builder()
-                                    .basePrice(card.getPrice())
-                                    .finalPrice(card.getPrice())
-                                    .percentOff(0)
-                                    .build();
-                        }
-                        return ProductCardWithPromotionResponse.builder()
-                                .productId(card.getProductId())
-                                .detailId(card.getDetailId())
-                                .productTitle(card.getProductTitle())
-                                .productSlug(card.getProductSlug())
-                                .colorName(card.getColorName())
-                                .price(card.getPrice())
-                                .finalPrice(applyRes.getFinalPrice())
-                                .percentOff(applyRes.getPercentOff())
-                                .promotionId(applyRes.getPromotionId())
-                                .promotionName(applyRes.getPromotionName())
-                                .quantity(card.getQuantity())
-                                .colors(card.getColors())
-                                .imageUrls(card.getImageUrls())
-                                .build();
-                    })
+                    .map(card -> ProductCardWithPromotionResponse.builder()
+                            .productId(card.getProductId())
+                            .detailId(card.getDetailId())
+                            .productTitle(card.getProductTitle())
+                            .productSlug(card.getProductSlug())
+                            .colorName(card.getColorName())
+                            .price(card.getPrice())
+                            .finalPrice(card.getFinalPrice() != null ? card.getFinalPrice() : card.getPrice())
+                            .percentOff(card.getPercentOff() != null ? card.getPercentOff() : 0)
+                            .promotionId(card.getPromotionId())
+                            .promotionName(card.getPromotionName())
+                            .quantity(card.getQuantity())
+                            .colors(card.getColors())
+                            .imageUrls(card.getImageUrls())
+                            .build())
                     .toList();
 
             return new PageResult<>(
