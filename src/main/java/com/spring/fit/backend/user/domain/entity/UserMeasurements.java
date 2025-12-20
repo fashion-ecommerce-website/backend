@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "user_measurements", indexes = {
         @Index(name = "idx_user_measurements_user_id", columnList = "user_id"),
-        @Index(name = "idx_user_measurements_gender_age", columnList = "gender, age"),
+        @Index(name = "idx_user_measurements_gender_bmi", columnList = "gender, bmi"),
         @Index(name = "idx_user_measurements_bmi", columnList = "bmi")
 })
 @Getter
@@ -35,7 +35,7 @@ public class UserMeasurements {
     @Column(name = "gender", nullable = false, length = 10)
     private Gender gender;
 
-    @Column(name = "age", nullable = false)
+    @Column(name = "age")
     private Integer age;
 
     @Column(name = "height", nullable = false, precision = 5, scale = 2)

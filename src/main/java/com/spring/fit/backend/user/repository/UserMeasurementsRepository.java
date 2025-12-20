@@ -36,12 +36,11 @@ public interface UserMeasurementsRepository extends JpaRepository<UserMeasuremen
     
     /**
      * Find users in same cluster (optimized for clustering approach)
-     * Filters by gender, BMI range, age range, and outliers
+     * Filters by gender, BMI range, and outliers
      */
     @Query("SELECT um FROM UserMeasurements um WHERE " +
             "um.gender = :gender AND " +
             "um.bmi BETWEEN :bmiMin AND :bmiMax AND " +
-            "um.age BETWEEN :ageMin AND :ageMax AND " +
             "um.user.id != :excludeUserId AND " +
             "um.bmi BETWEEN 15.0 AND 40.0 AND " +
             "um.height BETWEEN 140 AND 220 AND " +
@@ -50,7 +49,5 @@ public interface UserMeasurementsRepository extends JpaRepository<UserMeasuremen
             @Param("gender") Gender gender,
             @Param("bmiMin") BigDecimal bmiMin,
             @Param("bmiMax") BigDecimal bmiMax,
-            @Param("ageMin") Integer ageMin,
-            @Param("ageMax") Integer ageMax,
             @Param("excludeUserId") Long excludeUserId);
 }
