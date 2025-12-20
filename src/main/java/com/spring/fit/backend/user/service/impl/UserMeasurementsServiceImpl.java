@@ -46,7 +46,6 @@ public class UserMeasurementsServiceImpl implements UserMeasurementsService {
 
         // Update measurements
         measurements.setGender(request.getGender());
-        measurements.setAge(request.getAge());
         measurements.setHeight(request.getHeight());
         measurements.setWeight(request.getWeight());
         measurements.setChest(request.getChest());

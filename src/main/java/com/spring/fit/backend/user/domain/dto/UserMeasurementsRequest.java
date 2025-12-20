@@ -16,11 +16,6 @@ public class UserMeasurementsRequest {
     @NotNull(message = "Gender is required")
     private Gender gender;
 
-    @NotNull(message = "Age is required")
-    @Min(value = 18, message = "Age must be at least 18")
-    @Max(value = 100, message = "Age must be less than 100")
-    private Integer age;
-
     @NotNull(message = "Height is required")
     @DecimalMin(value = "140.0", message = "Height must be at least 140cm")
     @DecimalMax(value = "220.0", message = "Height must be less than 220cm")
