@@ -151,12 +151,20 @@ public class SizeStatistics {
         return 0.30;                         // >2 years: 30%
     }
     
+    /**
+     * Calculate quality multiplier based on average rating.
+     * Note: Rating is stored as 0.01-0.05 (representing 1-5 stars)
+     * So we need to multiply by 100 to get the actual star rating.
+     */
     private double calculateQualityMultiplier(double avgRating) {
-        if (avgRating >= 4.5) return 1.2;   // Excellent: +20%
-        if (avgRating >= 4.0) return 1.1;   // Good: +10%
-        if (avgRating >= 3.5) return 1.0;   // Average: no change
-        if (avgRating > 0) return 0.9;      // Below average: -10%
-        return 1.0;                          // No rating: no change
+        // Convert from 0.01-0.05 scale to 1-5 scale
+        double normalizedRating = avgRating * 100;
+        
+        if (normalizedRating >= 4.5) return 1.2;   // Excellent: +20%
+        if (normalizedRating >= 4.0) return 1.1;   // Good: +10%
+        if (normalizedRating >= 3.5) return 1.0;   // Average: no change
+        if (normalizedRating > 0) return 0.9;      // Below average: -10%
+        return 1.0;                                 // No rating: no change
     }
     
     public int getTotalOrders() {

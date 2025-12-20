@@ -49,21 +49,18 @@ public class SizeRecommendationServiceImpl implements SizeRecommendationService 
         UserMeasurements userMeasurements = measurementsRepository.findByUserId(userId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User measurements not found"));
         
-        // STEP 1: Clustering - Find users in same cluster
+        // STEP 1: Clustering - Find users in same cluster (by gender and BMI range)
         UserCluster cluster = UserCluster.fromMeasurements(userMeasurements);
         List<UserMeasurements> clusterCandidates = measurementsRepository.findUsersInCluster(
             cluster.getGender(),
             cluster.getBmiMin(),
             cluster.getBmiMax(),
-            cluster.getAgeMin(),
-            cluster.getAgeMax(),
             userId
         );
         
-        log.info("Found {} users in cluster (gender={}, bmi={}-{}, age={}-{})", 
+        log.info("Found {} users in cluster (gender={}, bmi={}-{})", 
             clusterCandidates.size(), cluster.getGender(), 
-            cluster.getBmiMin(), cluster.getBmiMax(),
-            cluster.getAgeMin(), cluster.getAgeMax());
+            cluster.getBmiMin(), cluster.getBmiMax());
         
         // STEP 2: Calculate similarity (body measurements + fit preference + body shapes)
         List<SimilarUser> similarUsers = clusterCandidates.stream()
@@ -258,10 +255,12 @@ public class SizeRecommendationServiceImpl implements SizeRecommendationService 
         }
         
         // Determine data quality
+        // Note: Rating is stored as 0.01-0.05 (representing 1-5 stars), so multiply by 100
+        double normalizedRating = avgRating * 100;
         SizeRecommendationResponse.DataQuality dataQuality;
-        if (totalSimilarUsers >= 20 && avgRating >= 4.0) {
+        if (totalSimilarUsers >= 20 && normalizedRating >= 4.0) {
             dataQuality = SizeRecommendationResponse.DataQuality.EXCELLENT;
-        } else if (totalSimilarUsers >= 10 && avgRating >= 3.5) {
+        } else if (totalSimilarUsers >= 10 && normalizedRating >= 3.5) {
             dataQuality = SizeRecommendationResponse.DataQuality.GOOD;
         } else if (totalSimilarUsers >= 5) {
             dataQuality = SizeRecommendationResponse.DataQuality.FAIR;
@@ -269,7 +268,7 @@ public class SizeRecommendationServiceImpl implements SizeRecommendationService 
             dataQuality = SizeRecommendationResponse.DataQuality.LIMITED;
         }
         
-        double highRatingRatio = avgRating >= 4.0 ? 0.8 : (avgRating >= 3.5 ? 0.6 : 0.4);
+        double highRatingRatio = normalizedRating >= 4.0 ? 0.8 : (normalizedRating >= 3.5 ? 0.6 : 0.4);
         
         return SizeRecommendationResponse.RecommendationMetadata.builder()
             .totalSimilarUsers(totalSimilarUsers)
