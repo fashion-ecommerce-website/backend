@@ -89,7 +89,8 @@ public class UserEntity {
 	private boolean phoneVerified = false;
 
 	@Column(name = "rank_id")
-	private Short rankId;
+    @Default
+	private Short rankId = 1;
 
 	// Spending tracking field
 	@Column(name = "total_spent", precision = 12, scale = 2)

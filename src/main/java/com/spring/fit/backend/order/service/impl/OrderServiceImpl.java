@@ -456,12 +456,6 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
                         "Order not found with id: " + orderId));
         
-        // Verify order belongs to user
-        if (!order.getUser().getId().equals(userId)) {
-            throw new ErrorException(HttpStatus.FORBIDDEN, 
-                    "Order does not belong to user");
-        }
-        
         // Check if order can be cancelled
         PaymentStatus currentPaymentStatus = order.getPaymentStatus();
         if (currentPaymentStatus == PaymentStatus.PAID) {

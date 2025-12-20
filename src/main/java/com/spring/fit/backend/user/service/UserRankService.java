@@ -3,6 +3,7 @@ package com.spring.fit.backend.user.service;
 import com.spring.fit.backend.user.domain.enums.RankThreshold;
 import com.spring.fit.backend.user.event.PaymentSuccessEvent;
 import com.spring.fit.backend.user.event.UserRankUpdatedEvent;
+import com.spring.fit.backend.user.event.UserRankChangedEvent;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,10 @@ public class UserRankService {
             // Publish rank updated event
             eventPublisher.publishEvent(new UserRankUpdatedEvent(
                     userId, previousRankId, newRankId, newTotal));
+            
+            // Publish rank changed event for JWT refresh (if needed)
+            eventPublisher.publishEvent(new UserRankChangedEvent(
+                    userId, previousRankId, newRankId, user.getEmail()));
         }
 
         userRepository.save(user);
