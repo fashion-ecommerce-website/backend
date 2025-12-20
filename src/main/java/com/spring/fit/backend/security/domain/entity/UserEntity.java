@@ -1,5 +1,6 @@
 package com.spring.fit.backend.security.domain.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -89,6 +90,11 @@ public class UserEntity {
 
 	@Column(name = "rank_id")
 	private Short rankId;
+
+	// Spending tracking field
+	@Column(name = "total_spent", precision = 12, scale = 2)
+	@Default
+	private BigDecimal totalSpent = BigDecimal.ZERO;
 
 	// Password reset support
 	@Column(name = "reset_password_token", length = 255)

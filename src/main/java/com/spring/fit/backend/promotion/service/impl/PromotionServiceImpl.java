@@ -3,7 +3,7 @@ package com.spring.fit.backend.promotion.service.impl;
 import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.category.repository.CategoryRepository;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
-import com.spring.fit.backend.product.repository.ProductRepository;
+import com.spring.fit.backend.product.repository.ProductMainRepository;
 import com.spring.fit.backend.promotion.domain.dto.request.PromotionRequest;
 import com.spring.fit.backend.promotion.domain.dto.request.PromotionTargetsRemoveRequest;
 import com.spring.fit.backend.promotion.domain.dto.request.PromotionTargetsUpsertRequest;
@@ -17,6 +17,8 @@ import com.spring.fit.backend.promotion.domain.entity.PromotionTarget;
 import com.spring.fit.backend.promotion.domain.entity.PromotionTargetId;
 import com.spring.fit.backend.common.enums.PromotionTargetType;
 import com.spring.fit.backend.common.enums.PromotionType;
+import com.spring.fit.backend.common.exception.ErrorException;
+import org.springframework.http.HttpStatus;
 import com.spring.fit.backend.promotion.repository.PromotionRepository;
 import com.spring.fit.backend.promotion.repository.PromotionTargetRepository;
 import com.spring.fit.backend.promotion.service.PromotionService;
@@ -32,8 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -43,22 +44,34 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionRepository promotionRepository;
     private final PromotionTargetRepository promotionTargetRepository;
     private final ProductDetailRepository productDetailRepository;
-    private final ProductRepository productRepository;
+    private final ProductMainRepository productMainRepository;
     private final CategoryRepository categoryRepository;
 
     @Override
     @Transactional
     public PromotionResponse create(PromotionRequest request) {
-        validatePromotionRequest(request);
+        validatePromotionRequestForCreate(request);
 
-        if (promotionRepository.existsByNameIgnoreCaseAndStartAtAndEndAt(request.getName(), request.getStartAt(), request.getEndAt())) {
-            throw new IllegalArgumentException("Promotion name duplicated in the same period");
+        if (request.getTargets() != null && !request.getTargets().isEmpty()) {
+            for (PromotionRequest.TargetItem target : request.getTargets()) {
+                validateTargetItem(target);
+                
+                // Kiểm tra tất cả SKUs của target có promotion nào trong period không
+                validateNoSkuConflict(target, request.getStartAt(), request.getEndAt(), null);
+            }
         }
 
         Promotion p = new Promotion();
         applyRequestToEntity(request, p);
         Promotion saved = promotionRepository.save(p);
-        return toResponse(saved);
+
+        if (request.getTargets() != null && !request.getTargets().isEmpty()) {
+            createTargetsForPromotion(saved, request.getTargets());
+        }
+
+        // Reload entity để có targets mới trong response
+        Promotion reloaded = promotionRepository.findById(saved.getId()).orElse(saved);
+        return toResponse(reloaded);
     }
 
     @Override
@@ -99,17 +112,90 @@ public class PromotionServiceImpl implements PromotionService {
         validatePromotionRequest(request);
         Promotion p = promotionRepository.findById(id).orElseThrow(() -> new RuntimeException("Promotion not found"));
 
-        applyRequestToEntity(request, p);
-        Promotion saved = promotionRepository.save(p);
-        return toResponse(saved);
+        validatePromotionNotStarted(p);
+
+        // Nếu request có targets mới, validate và cập nhật targets
+        if (request.getTargets() != null) {
+            // Validate targets mới
+            for (PromotionRequest.TargetItem target : request.getTargets()) {
+                validateTargetItem(target);
+                // Kiểm tra conflict với promotion khác (loại trừ chính nó)
+                validateNoSkuConflict(target, request.getStartAt(), request.getEndAt(), id);
+            }
+
+            // Xóa tất cả targets cũ 
+            p.getPromotionTargets().clear();
+
+            // Thêm targets mới
+            applyRequestToEntity(request, p);
+            Promotion saved = promotionRepository.saveAndFlush(p);
+
+            if (!request.getTargets().isEmpty()) {
+                createTargetsForPromotion(saved, request.getTargets());
+            }
+
+            // Reload entity để có targets mới trong response
+            Promotion reloaded = promotionRepository.findById(saved.getId()).orElse(saved);
+            return toResponse(reloaded);
+        } else {
+            // Nếu không có targets trong request, chỉ kiểm tra targets hiện tại với thời gian mới
+            for (PromotionTarget existingTarget : p.getPromotionTargets()) {
+                PromotionRequest.TargetItem targetItem = PromotionRequest.TargetItem.builder()
+                        .targetType(existingTarget.getTargetType())
+                        .targetId(existingTarget.getTargetId())
+                        .build();
+                validateNoSkuConflict(targetItem, request.getStartAt(), request.getEndAt(), id);
+            }
+
+            applyRequestToEntity(request, p);
+            Promotion saved = promotionRepository.save(p);
+            return toResponse(saved);
+        }
     }
 
     @Override
     @Transactional
     public void toggleActive(Long id) {
         Promotion p = promotionRepository.findById(id).orElseThrow(() -> new RuntimeException("Promotion not found"));
+        
+        // Nếu đang inactive và muốn chuyển sang active, kiểm tra conflict
+        if (!p.isActive()) {
+            // Kiểm tra tất cả targets của promotion này có conflict với promotion khác không
+            for (PromotionTarget existingTarget : p.getPromotionTargets()) {
+                PromotionRequest.TargetItem targetItem = PromotionRequest.TargetItem.builder()
+                        .targetType(existingTarget.getTargetType())
+                        .targetId(existingTarget.getTargetId())
+                        .build();
+                // Kiểm tra conflict (loại trừ chính promotion này)
+                validateNoSkuConflictForActivation(targetItem, p.getStartAt(), p.getEndAt(), id);
+            }
+        }
+        
         p.setActive(!p.isActive());
         promotionRepository.save(p);
+    }
+    
+    /**
+     * Kiểm tra conflict khi active promotion
+     */
+    private void validateNoSkuConflictForActivation(PromotionRequest.TargetItem target,
+                                                     LocalDateTime startAt,
+                                                     LocalDateTime endAt,
+                                                     Long excludePromotionId) {
+        List<Long> skuIds = getSkuIdsFromTarget(target);
+        
+        for (Long skuId : skuIds) {
+            Long conflictingPromotionId = promotionTargetRepository.findConflictingPromotionIdForSkuExcluding(
+                    skuId, excludePromotionId, startAt, endAt);
+            
+            if (conflictingPromotionId != null) {
+                throw new IllegalArgumentException(
+                        "Cannot activate promotion: SKU ID " + skuId + 
+                        " already has an active promotion (Promotion ID: " + conflictingPromotionId + 
+                        ") in the time period " + startAt + " to " + endAt + 
+                        ". Please deactivate the conflicting promotion first.");
+            }
+        }
     }
 
     @Override
@@ -134,6 +220,14 @@ public class PromotionServiceImpl implements PromotionService {
                 ignored++;
                 continue;
             }
+            
+            // Kiểm tra tất cả SKUs của target có promotion nào trong period không
+            PromotionRequest.TargetItem targetItem = PromotionRequest.TargetItem.builder()
+                    .targetType(item.getTargetType())
+                    .targetId(item.getTargetId())
+                    .build();
+            validateNoSkuConflict(targetItem, promotion.getStartAt(), promotion.getEndAt(), promotionId);
+            
             PromotionTarget t = PromotionTarget.builder()
                     .id(id)
                     .promotion(promotion)
@@ -179,15 +273,29 @@ public class PromotionServiceImpl implements PromotionService {
     }
 
     @Override
-    public PromotionApplyResponse applyBestPromotionForSku(PromotionApplyRequest request) {
+    public PromotionApplyResponse applyPromotionForSku(PromotionApplyRequest request) {
         var at = request.getAt() == null ? LocalDateTime.now() : request.getAt();
         var sku = productDetailRepository.findById(request.getSkuId())
                 .orElseThrow(() -> new RuntimeException("SKU (product_detail) not found"));
 
         var basePrice = request.getBasePrice() != null ? request.getBasePrice() : sku.getPrice();
 
-        var activePromotions = promotionRepository.findActiveAt(at);
-        if (activePromotions.isEmpty()) {
+        Long productId = sku.getProduct().getId();
+        List<Long> categoryIds = new ArrayList<>();
+        if (sku.getProduct().getCategories() != null) {
+            for (var c : sku.getProduct().getCategories()) {
+                categoryIds.add(c.getId().longValue());
+            }
+        }
+
+        if (categoryIds.isEmpty()) {
+            categoryIds.add(-1L);
+        }
+
+        Long promotionId = promotionTargetRepository.findPromotionIdForSkuAt(
+                sku.getId(), productId, categoryIds, at);
+
+        if (promotionId == null) {
             return PromotionApplyResponse.builder()
                     .basePrice(basePrice)
                     .finalPrice(basePrice)
@@ -197,58 +305,70 @@ public class PromotionServiceImpl implements PromotionService {
                     .build();
         }
 
-        Long productId = sku.getProduct().getId();
-        Set<Long> categoryIds = new HashSet<>();
-        if (sku.getProduct().getCategories() != null) {
-            for (var c : sku.getProduct().getCategories()) {
-                categoryIds.add(c.getId().longValue());
-            }
+        Promotion promotion = promotionRepository.findById(promotionId)
+                .orElse(null);
+        
+        if (promotion == null) {
+            return PromotionApplyResponse.builder()
+                    .basePrice(basePrice)
+                    .finalPrice(basePrice)
+                    .percentOff(0)
+                    .promotionId(null)
+                    .promotionName(null)
+                    .build();
         }
 
-        BigDecimal bestDiscount = BigDecimal.ZERO;
-        Long bestPromotionId = null;
-        String bestPromotionName = null;
-
-        for (var promo : activePromotions) {
-            boolean matched = false;
-            for (var t : promo.getPromotionTargets()) {
-                switch (t.getId().getTargetType()) {
-                    case SKU -> matched = t.getId().getTargetId().equals(sku.getId());
-                    case PRODUCT -> matched = t.getId().getTargetId().equals(productId);
-                    case CATEGORY -> matched = categoryIds.contains(t.getId().getTargetId());
-                }
-                if (matched) break;
-            }
-            if (!matched) continue;
-
-            BigDecimal discount;
-            if (promo.getType() == PromotionType.PERCENT) {
-                discount = basePrice.multiply(promo.getValue()).divide(BigDecimal.valueOf(100));
-            } else {
-                discount = promo.getValue();
-            }
-            if (discount.compareTo(bestDiscount) > 0) {
-                bestDiscount = discount;
-                bestPromotionId = promo.getId();
-                bestPromotionName = promo.getName();
-            }
+        // Tính discount
+        BigDecimal discount;
+        if (promotion.getType() == PromotionType.PERCENT) {
+            discount = basePrice.multiply(promotion.getValue()).divide(BigDecimal.valueOf(100), RoundingMode.DOWN);
+        } else {
+            discount = promotion.getValue();
         }
 
-        var finalPrice = basePrice.subtract(bestDiscount);
+        var finalPrice = basePrice.subtract(discount);
         if (finalPrice.compareTo(BigDecimal.ZERO) < 0) {
             finalPrice = BigDecimal.ZERO;
         }
-        int percentOff = basePrice.signum() == 0 ? 0 : bestDiscount.multiply(BigDecimal.valueOf(100)).divide(basePrice, RoundingMode.DOWN).intValue();
+        int percentOff = basePrice.signum() == 0 ? 0 : discount.multiply(BigDecimal.valueOf(100)).divide(basePrice, RoundingMode.DOWN).intValue();
 
         return PromotionApplyResponse.builder()
                 .basePrice(basePrice)
                 .finalPrice(finalPrice)
                 .percentOff(percentOff)
-                .promotionId(bestPromotionId)
-                .promotionName(bestPromotionName)
+                .promotionId(promotion.getId())
+                .promotionName(promotion.getName())
                 .build();
     }
 
+    private void validatePromotionNotStarted(Promotion promotion) {
+        LocalDateTime now = LocalDateTime.now();
+        if (!promotion.getStartAt().isAfter(now)) {
+            throw new IllegalArgumentException(
+                    "Cannot update promotion: Promotion has already started or ended. " +
+                    "Start time: " + promotion.getStartAt() + ", Current time: " + now);
+        }
+    }
+
+    /**
+     * Validate promotion request for CREATE
+     * - startAt must be >= now (cannot be in the past)
+     */
+    private void validatePromotionRequestForCreate(PromotionRequest request) {
+        validatePromotionRequest(request);
+        
+        // Additional validation for CREATE: startAt must be >= now
+        LocalDateTime now = LocalDateTime.now();
+        
+        if (request.getStartAt().isBefore(now)) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                "start_at cannot be in the past");
+        }
+    }
+    
+    /**
+     * Common validation for promotion request (used by both CREATE and UPDATE)
+     */
     private void validatePromotionRequest(PromotionRequest request) {
         if (request.getName() == null || request.getName().isBlank()) {
             throw new IllegalArgumentException("name is required");
@@ -288,15 +408,24 @@ public class PromotionServiceImpl implements PromotionService {
                 if (!productDetailRepository.existsById(item.getTargetId())) {
                     throw new IllegalArgumentException("SKU (product_detail) not found: " + item.getTargetId());
                 }
+                if (!productDetailRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("SKU (product_detail) is not active: " + item.getTargetId());
+                }
             }
             case PRODUCT -> {
-                if (!productRepository.existsById(item.getTargetId())) {
+                if (!productMainRepository.existsById(item.getTargetId())) {
                     throw new IllegalArgumentException("Product not found: " + item.getTargetId());
+                }
+                if (!productMainRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Product is not active: " + item.getTargetId());
                 }
             }
             case CATEGORY -> {
                 if (!categoryRepository.existsById(item.getTargetId())) {
                     throw new IllegalArgumentException("Category not found: " + item.getTargetId());
+                }
+                if (!categoryRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Category is not active: " + item.getTargetId());
                 }
             }
         }
@@ -312,6 +441,15 @@ public class PromotionServiceImpl implements PromotionService {
     }
 
     private PromotionResponse toResponse(Promotion p) {
+        // Lấy danh sách targets của promotion
+        List<PromotionResponse.TargetItem> targets = p.getPromotionTargets().stream()
+                .map(t -> PromotionResponse.TargetItem.builder()
+                        .targetType(t.getTargetType())
+                        .targetId(t.getTargetId())
+                        .targetName(getTargetName(t.getTargetType(), t.getTargetId()))
+                        .build())
+                .toList();
+
         return PromotionResponse.builder()
                 .id(p.getId())
                 .name(p.getName())
@@ -322,7 +460,22 @@ public class PromotionServiceImpl implements PromotionService {
                 .isActive(p.isActive())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
+                .targets(targets)
                 .build();
+    }
+
+    private String getTargetName(PromotionTargetType targetType, Long targetId) {
+        return switch (targetType) {
+            case SKU -> productDetailRepository.findById(targetId)
+                    .map(pd -> pd.getProduct().getTitle() + " - " + pd.getColor().getName() + " - " + pd.getSize().getLabel())
+                    .orElse(null);
+            case PRODUCT -> productMainRepository.findById(targetId)
+                    .map(product -> product.getTitle())
+                    .orElse(null);
+            case CATEGORY -> categoryRepository.findById(targetId)
+                    .map(category -> category.getName())
+                    .orElse(null);
+        };
     }
 
     private Pageable buildPageable(String sort, int page, int pageSize) {
@@ -333,6 +486,101 @@ public class PromotionServiceImpl implements PromotionService {
         String prop = parts[0];
         Sort.Direction dir = parts.length > 1 && parts[1].equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
         return PageRequest.of(page, pageSize, Sort.by(dir, prop));
+    }
+
+    private void validateTargetItem(PromotionRequest.TargetItem item) {
+        if (item.getTargetType() == null || item.getTargetId() == null) {
+            throw new IllegalArgumentException("targetType and targetId are required");
+        }
+        switch (item.getTargetType()) {
+            case SKU -> {
+                if (!productDetailRepository.existsById(item.getTargetId())) {
+                    throw new IllegalArgumentException("SKU (product_detail) not found: " + item.getTargetId());
+                }
+                if (!productDetailRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("SKU (product_detail) is not active: " + item.getTargetId());
+                }
+            }
+            case PRODUCT -> {
+                if (!productMainRepository.existsById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Product not found: " + item.getTargetId());
+                }
+                if (!productMainRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Product is not active: " + item.getTargetId());
+                }
+            }
+            case CATEGORY -> {
+                if (!categoryRepository.existsById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Category not found: " + item.getTargetId());
+                }
+                if (!categoryRepository.existsActiveById(item.getTargetId())) {
+                    throw new IllegalArgumentException("Category is not active: " + item.getTargetId());
+                }
+            }
+        }
+    }
+
+    private void createTargetsForPromotion(Promotion promotion, List<PromotionRequest.TargetItem> targets) {
+        Set<PromotionTargetId> seen = new HashSet<>();
+        
+        for (PromotionRequest.TargetItem item : targets) {
+            PromotionTargetId id = new PromotionTargetId(promotion.getId(), item.getTargetType(), item.getTargetId());
+            
+            // Bỏ qua duplicate trong cùng request
+            if (seen.contains(id)) {
+                continue;
+            }
+            seen.add(id);
+
+            PromotionTarget target = PromotionTarget.builder()
+                    .id(id)
+                    .promotion(promotion)
+                    .targetType(item.getTargetType())
+                    .targetId(item.getTargetId())
+                    .build();
+            promotionTargetRepository.save(target);
+        }
+    }
+
+    /**
+     * Kiểm tra tất cả SKUs của target có promotion nào trong period không
+     * @param target target cần kiểm tra (SKU, PRODUCT, hoặc CATEGORY)
+     * @param startAt thời gian bắt đầu
+     * @param endAt thời gian kết thúc
+     * @param excludePromotionId promotion ID cần loại trừ (null nếu tạo mới)
+     */
+    private void validateNoSkuConflict(PromotionRequest.TargetItem target, 
+                                       LocalDateTime startAt, 
+                                       LocalDateTime endAt, 
+                                       Long excludePromotionId) {
+        List<Long> skuIds = getSkuIdsFromTarget(target);
+        
+        for (Long skuId : skuIds) {
+            Long conflictingPromotionId;
+            if (excludePromotionId == null) {
+                conflictingPromotionId = promotionTargetRepository.findConflictingPromotionIdForSku(skuId, startAt, endAt);
+            } else {
+                conflictingPromotionId = promotionTargetRepository.findConflictingPromotionIdForSkuExcluding(
+                        skuId, excludePromotionId, startAt, endAt);
+            }
+            
+            if (conflictingPromotionId != null) {
+                throw new IllegalArgumentException(
+                        "SKU ID " + skuId + " already has a promotion (Promotion ID: " + conflictingPromotionId + 
+                        ") in the specified time period. Please deactivate the existing promotion first.");
+            }
+        }
+    }
+
+    /**
+     * Lấy tất cả SKU IDs từ target
+     */
+    private List<Long> getSkuIdsFromTarget(PromotionRequest.TargetItem target) {
+        return switch (target.getTargetType()) {
+            case SKU -> List.of(target.getTargetId());
+            case PRODUCT -> productDetailRepository.findSkuIdsByProductId(target.getTargetId());
+            case CATEGORY -> productDetailRepository.findSkuIdsByCategoryId(target.getTargetId());
+        };
     }
 }
 

@@ -37,7 +37,7 @@ public class VoucherController {
         // Get user email from SecurityContext, then resolve userId
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity user = userRepository.findActiveUserByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Please log in to use vouchers"));
         Long userId = user.getId();
         
         // Validate voucher
@@ -61,7 +61,7 @@ public class VoucherController {
 
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity user = userRepository.findActiveUserByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Please log in to view available vouchers"));
         Long userId = user.getId();
 
         List<VoucherByUserResponse> responses = voucherService.getVouchersByUser(userId, subtotal, searchCode);

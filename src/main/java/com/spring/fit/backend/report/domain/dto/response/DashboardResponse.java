@@ -33,8 +33,7 @@ public class DashboardResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ChartDataDto {
-        private String date;
-        private String label;
+        private String target;  // month (1-12) or year (2025, 2024, ...)
         private Long totalOrders;
         private Long completedOrders;
         private Long cancelledOrders;

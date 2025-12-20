@@ -21,12 +21,19 @@ public class Wishlist {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long wishlistId;
 
-    private Long userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private UserEntity user;
 
-    private Long detailId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "detail_id", nullable = false)
+    private ProductDetail productDetail;
 
-    private Timestamp createdAt;
-
-    public Wishlist(Long id, Long detailId) {
-    }
+    @Column(
+            name = "created_at",
+            updatable = false,
+            insertable = false,
+            columnDefinition = "timestamp default now()"
+    )
+    private LocalDateTime createdAt;
 }

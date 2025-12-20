@@ -15,11 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.spring.fit.backend.common.util.DateUtils. *;
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -34,30 +31,27 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardResponse getDashboardData(PeriodType period) {
         log.info("Getting dashboard data for period: {}", period);
 
-        // Calculate date range based on period
-        LocalDate endDate = LocalDate.now();
-        LocalDate startDate = calculateStartDate(period, endDate);
+        // Only support MONTH and YEAR
+        if (period != PeriodType.MONTH && period != PeriodType.YEAR) {
+            log.warn("Unsupported period type: {}, defaulting to MONTH", period);
+            period = PeriodType.MONTH;
+        }
 
         // Get summary data
         DashboardResponse.SummaryDto summary = getSummary();
 
-        // Get chart data
-        List<DashboardResponse.ChartDataDto> chartData = getChartData(startDate, endDate);
+        // Get chart data based on period
+        List<DashboardResponse.ChartDataDto> chartData = switch (period) {
+            case MONTH -> getChartDataByMonth();
+            case YEAR -> getChartDataByYear();
+            default -> getChartDataByMonth(); // fallback
+        };
 
         return DashboardResponse.builder()
-                .period(period.getValue())
+                .period(period.name())
                 .summary(summary)
                 .chartData(chartData)
                 .build();
-    }
-
-    private LocalDate calculateStartDate(PeriodType period, LocalDate endDate) {
-        return switch (period) {
-            case DAY -> endDate;
-            case WEEK -> endDate.minusDays(6);
-            case MONTH -> endDate.minusDays(29);
-            case YEAR -> endDate.minusDays(364);
-        };
     }
 
     private DashboardResponse.SummaryDto getSummary() {
@@ -77,56 +71,50 @@ public class DashboardServiceImpl implements DashboardService {
                 .build();
     }
 
-    private List<DashboardResponse.ChartDataDto> getChartData(LocalDate startDate, LocalDate endDate) {
+    private List<DashboardResponse.ChartDataDto> getChartDataByMonth() {
         List<DashboardResponse.ChartDataDto> chartDataList = new ArrayList<>();
+        int currentYear = LocalDate.now().getYear();
         
-        LocalDate currentDate = startDate;
-        while (!currentDate.isAfter(endDate)) {
-            LocalDateTime dateTime = currentDate.atStartOfDay();
-            LocalDateTime nextDate = currentDate.plusDays(1).atStartOfDay();
-            
+        // Get data for 12 months of current year (1-12)
+        for (int month = 1; month <= 12; month++) {
             // Count orders by status
-            Long totalOrders = orderRepository.countOrdersByDate(dateTime, nextDate);
+            Long totalOrders = orderRepository.countOrdersByMonthAndYear(currentYear, month);
             if (totalOrders == null) totalOrders = 0L;
             
-            Long completedOrders = orderRepository.countOrdersByDateAndStatus(dateTime, nextDate, FulfillmentStatus.FULFILLED.getValue());
+            Long completedOrders = orderRepository.countOrdersByMonthYearAndStatus(currentYear, month, FulfillmentStatus.FULFILLED.getValue());
             if (completedOrders == null) completedOrders = 0L;
             
-            Long cancelledOrders = orderRepository.countOrdersByDateAndStatus(dateTime, nextDate, FulfillmentStatus.CANCELLED.getValue());
+            Long cancelledOrders = orderRepository.countOrdersByMonthYearAndStatus(currentYear, month, FulfillmentStatus.CANCELLED.getValue());
             if (cancelledOrders == null) cancelledOrders = 0L;
             
-            Long unfulfilledOrders = orderRepository.countOrdersByDateAndStatus(dateTime, nextDate, FulfillmentStatus.UNFULFILLED.getValue());
+            Long unfulfilledOrders = orderRepository.countOrdersByMonthYearAndStatus(currentYear, month, FulfillmentStatus.UNFULFILLED.getValue());
             if (unfulfilledOrders == null) unfulfilledOrders = 0L;
             
-            Long partiallyFulfilledOrders = orderRepository.countOrdersByDateAndStatus(dateTime, nextDate, FulfillmentStatus.PARTIALLY_FULFILLED.getValue());
+            Long partiallyFulfilledOrders = orderRepository.countOrdersByMonthYearAndStatus(currentYear, month, FulfillmentStatus.PARTIALLY_FULFILLED.getValue());
             if (partiallyFulfilledOrders == null) partiallyFulfilledOrders = 0L;
             
             Long pendingOrders = unfulfilledOrders + partiallyFulfilledOrders;
 
             // Calculate revenue
-            BigDecimal totalRevenue = orderRepository.sumTotalRevenueByDate(dateTime, nextDate);
+            BigDecimal totalRevenue = orderRepository.sumTotalRevenueByMonthAndYear(currentYear, month);
             if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
             
-            BigDecimal paidRevenue = orderRepository.sumRevenueByDateAndPaymentStatus(dateTime, nextDate, PaymentStatus.PAID.getValue());
+            BigDecimal paidRevenue = orderRepository.sumRevenueByMonthYearAndPaymentStatus(currentYear, month, PaymentStatus.PAID.getValue());
             if (paidRevenue == null) paidRevenue = BigDecimal.ZERO;
             
-            BigDecimal unpaidAmount = orderRepository.sumRevenueByDateAndPaymentStatus(dateTime, nextDate, PaymentStatus.UNPAID.getValue());
+            BigDecimal unpaidAmount = orderRepository.sumRevenueByMonthYearAndPaymentStatus(currentYear, month, PaymentStatus.UNPAID.getValue());
             if (unpaidAmount == null) unpaidAmount = BigDecimal.ZERO;
             
-            BigDecimal partiallyPaidAmount = orderRepository.sumRevenueByDateAndPaymentStatus(dateTime, nextDate, PaymentStatus.PARTIALLY_PAID.getValue());
+            BigDecimal partiallyPaidAmount = orderRepository.sumRevenueByMonthYearAndPaymentStatus(currentYear, month, PaymentStatus.PARTIALLY_PAID.getValue());
             if (partiallyPaidAmount == null) partiallyPaidAmount = BigDecimal.ZERO;
             
             BigDecimal unpaidRevenue = unpaidAmount.add(partiallyPaidAmount);
             
-            BigDecimal refundedRevenue = orderRepository.sumRevenueByDateAndPaymentStatus(dateTime, nextDate, PaymentStatus.REFUNDED.getValue());
+            BigDecimal refundedRevenue = orderRepository.sumRevenueByMonthYearAndPaymentStatus(currentYear, month, PaymentStatus.REFUNDED.getValue());
             if (refundedRevenue == null) refundedRevenue = BigDecimal.ZERO;
 
-            // Get day label (Mon, Tue, etc.)
-            String label = currentDate.format(DAY_LABEL_FORMATTER);
-
             DashboardResponse.ChartDataDto chartData = DashboardResponse.ChartDataDto.builder()
-                    .date(currentDate.format(DATE_FORMATTER))
-                    .label(label)
+                    .target(String.valueOf(month))
                     .totalOrders(totalOrders)
                     .completedOrders(completedOrders)
                     .cancelledOrders(cancelledOrders)
@@ -138,7 +126,68 @@ public class DashboardServiceImpl implements DashboardService {
                     .build();
 
             chartDataList.add(chartData);
-            currentDate = currentDate.plusDays(1);
+        }
+
+        return chartDataList;
+    }
+
+    private List<DashboardResponse.ChartDataDto> getChartDataByYear() {
+        List<DashboardResponse.ChartDataDto> chartDataList = new ArrayList<>();
+        int currentYear = LocalDate.now().getYear();
+        
+        // Get data for 12 years from current year going back (2025, 2024, ..., 2014)
+        for (int i = 0; i < 12; i++) {
+            int year = currentYear - i;
+            
+            // Count orders by status
+            Long totalOrders = orderRepository.countOrdersByYear(year);
+            if (totalOrders == null) totalOrders = 0L;
+            
+            Long completedOrders = orderRepository.countOrdersByYearAndStatus(year, FulfillmentStatus.FULFILLED.getValue());
+            if (completedOrders == null) completedOrders = 0L;
+            
+            Long cancelledOrders = orderRepository.countOrdersByYearAndStatus(year, FulfillmentStatus.CANCELLED.getValue());
+            if (cancelledOrders == null) cancelledOrders = 0L;
+            
+            Long unfulfilledOrders = orderRepository.countOrdersByYearAndStatus(year, FulfillmentStatus.UNFULFILLED.getValue());
+            if (unfulfilledOrders == null) unfulfilledOrders = 0L;
+            
+            Long partiallyFulfilledOrders = orderRepository.countOrdersByYearAndStatus(year, FulfillmentStatus.PARTIALLY_FULFILLED.getValue());
+            if (partiallyFulfilledOrders == null) partiallyFulfilledOrders = 0L;
+            
+            Long pendingOrders = unfulfilledOrders + partiallyFulfilledOrders;
+
+            // Calculate revenue
+            BigDecimal totalRevenue = orderRepository.sumTotalRevenueByYear(year);
+            if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
+            
+            BigDecimal paidRevenue = orderRepository.sumRevenueByYearAndPaymentStatus(year, PaymentStatus.PAID.getValue());
+            if (paidRevenue == null) paidRevenue = BigDecimal.ZERO;
+            
+            BigDecimal unpaidAmount = orderRepository.sumRevenueByYearAndPaymentStatus(year, PaymentStatus.UNPAID.getValue());
+            if (unpaidAmount == null) unpaidAmount = BigDecimal.ZERO;
+            
+            BigDecimal partiallyPaidAmount = orderRepository.sumRevenueByYearAndPaymentStatus(year, PaymentStatus.PARTIALLY_PAID.getValue());
+            if (partiallyPaidAmount == null) partiallyPaidAmount = BigDecimal.ZERO;
+            
+            BigDecimal unpaidRevenue = unpaidAmount.add(partiallyPaidAmount);
+            
+            BigDecimal refundedRevenue = orderRepository.sumRevenueByYearAndPaymentStatus(year, PaymentStatus.REFUNDED.getValue());
+            if (refundedRevenue == null) refundedRevenue = BigDecimal.ZERO;
+
+            DashboardResponse.ChartDataDto chartData = DashboardResponse.ChartDataDto.builder()
+                    .target(String.valueOf(year))
+                    .totalOrders(totalOrders)
+                    .completedOrders(completedOrders)
+                    .cancelledOrders(cancelledOrders)
+                    .pendingOrders(pendingOrders)
+                    .totalRevenue(totalRevenue)
+                    .unpaidRevenue(unpaidRevenue)
+                    .paidRevenue(paidRevenue)
+                    .refundedRevenue(refundedRevenue)
+                    .build();
+
+            chartDataList.add(chartData);
         }
 
         return chartDataList;

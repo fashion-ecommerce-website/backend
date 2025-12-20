@@ -20,4 +20,7 @@ public interface OrderDetailPromotionRepository extends JpaRepository<OrderDetai
 
     @Query("SELECT COUNT(odp) FROM OrderDetailPromotion odp WHERE odp.promotion.id = :promotionId")
     Long countByPromotionId(@Param("promotionId") Long promotionId);
+
+    @Query("SELECT odp FROM OrderDetailPromotion odp WHERE odp.order.id = :orderId AND odp.detail.id = :detailId")
+    OrderDetailPromotion findByOrderIdAndDetailId(@Param("orderId") Long orderId, @Param("detailId") Long detailId);
 }

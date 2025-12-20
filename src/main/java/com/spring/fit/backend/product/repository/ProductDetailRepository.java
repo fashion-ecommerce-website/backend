@@ -103,6 +103,38 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
     boolean existsByProductTitleAndColorAndSize(@Param("title") String title,
                                                 @Param("color") String color,
                                                 @Param("size") String size);
+
+    @Query("SELECT pd.id FROM ProductDetail pd WHERE pd.product.id = :productId")
+    List<Long> findSkuIdsByProductId(@Param("productId") Long productId);
+
+    @Query(value = """
+        SELECT pd.id FROM product_details pd
+        JOIN product_categories pc ON pd.product_id = pc.product_id
+        WHERE pc.category_id = :categoryId
+    """, nativeQuery = true)
+    List<Long> findSkuIdsByCategoryId(@Param("categoryId") Long categoryId);
+
+    @Query("SELECT COUNT(pd) > 0 FROM ProductDetail pd WHERE pd.id = :id AND pd.isActive = true AND pd.product.isActive = true")
+    boolean existsActiveById(@Param("id") Long id);
+
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        LEFT JOIN FETCH pd.product p
+        LEFT JOIN FETCH pd.color
+        LEFT JOIN FETCH pd.size
+        WHERE pd.isActive = true AND p.isActive = true
+        """)
+    List<ProductDetail> findByIsActiveTrue();
+
+    /**
+     * Find all product details with the same product and color
+     * Used for syncing images across all sizes of the same color
+     */
+    @Query("""
+        SELECT pd FROM ProductDetail pd
+        WHERE pd.product.id = :productId AND pd.color.id = :colorId
+        """)
+    List<ProductDetail> findByProductIdAndColorId(@Param("productId") Long productId, @Param("colorId") Short colorId);
 }
 
 

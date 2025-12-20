@@ -33,7 +33,8 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
 
     @Query("""
         SELECT DISTINCT p FROM Product p
-        LEFT JOIN FETCH p.categories
+        LEFT JOIN FETCH p.categories c
+        LEFT JOIN FETCH c.parent
         LEFT JOIN FETCH p.details d
         LEFT JOIN FETCH d.color
         LEFT JOIN FETCH d.size
@@ -73,7 +74,7 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
             Pageable pageable
     );
 
-    @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids")
+    @Query("SELECT COUNT(p) > 0 FROM Product p JOIN p.categories c WHERE c.id IN :ids AND p.isActive = true")
     boolean existsByCategoryIds(@Param("ids") List<Long> ids);
 
     boolean existsByTitleIgnoreCaseAndDescriptionIgnoreCaseAndCategoriesIn(
@@ -82,4 +83,8 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
             Set<Category> categories
     );
 
+    @Query("SELECT COUNT(p) > 0 FROM Product p WHERE p.id = :id AND p.isActive = true")
+    boolean existsActiveById(@Param("id") Long id);
+
+    List<Product> findByIsActiveTrue();
 }

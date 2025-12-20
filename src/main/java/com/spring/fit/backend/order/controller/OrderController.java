@@ -106,4 +106,18 @@ public class OrderController {
 
         return ResponseEntity.ok(response);
     }
+
+    // Cancel order
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<OrderResponse> cancelOrder(@PathVariable Long id) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
+        
+        log.info("Inside OrderController.cancelOrder cancelling order {} for user {}", id, user.getId());
+
+        OrderResponse response = orderService.cancelOrder(id, user.getId());
+
+        return ResponseEntity.ok(response);
+    }
 }

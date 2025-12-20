@@ -1,6 +1,12 @@
 package com.spring.fit.backend.review.service.impl;
 
+import com.spring.fit.backend.common.enums.FulfillmentStatus;
+import com.spring.fit.backend.common.enums.OrderStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
+import com.spring.fit.backend.order.domain.dto.response.OrderResponse;
+import com.spring.fit.backend.order.domain.entity.Order;
+import com.spring.fit.backend.order.domain.entity.OrderDetail;
+import com.spring.fit.backend.order.repository.OrderRepository;
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import com.spring.fit.backend.review.domain.dto.request.CreateReviewRequest;
@@ -29,38 +35,58 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final ProductDetailRepository productDetailRepository;
+    private final OrderRepository orderRepository;
 
     @Override
     public ReviewResponse createReview(String userEmail, CreateReviewRequest request) {
-        log.info("Inside ReviewServiceImpl.createReview userEmail={}, request={}", userEmail, request);
 
-        // Tìm user
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-        // Tìm product detail
-        ProductDetail productDetail = productDetailRepository.findById(request.getProductDetailId())
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found"));
+        // 1️⃣ Lấy orderDetailId từ request
+        Long orderDetailId = request.getOrderDetailId();
 
-        // Tạo entity review
+        Order order = orderRepository.findByIdWithDetails(request.getOrderId())
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        OrderDetail orderDetail = order.getOrderDetails().stream()
+                .filter(od -> od.getId().equals(request.getOrderDetailId()))
+                .findFirst()
+                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order detail not found"));
+
+
+        // 3️⃣ Check ownership
+        if (!order.getUser().getId().equals(user.getId())) {
+            throw new ErrorException(HttpStatus.FORBIDDEN, "Not your order");
+        }
+        // 4️⃣ Check order completed
+        if (order.getStatus() != FulfillmentStatus.FULFILLED) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Order not completed");
+        }
+
+
+        // 6️⃣ Check đã review chưa
+        if (orderDetail.getReview() != null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Already reviewed");
+        }
+
+        // 7️⃣ Tạo review
         Review review = Review.builder()
-                .user(user)
-                .productDetail(productDetail)
+                .orderDetail(orderDetail)
                 .rating(request.getRating())
                 .content(request.getContent())
                 .build();
 
-        Review savedReview = reviewRepository.save(review);
-
-        log.info("Inside ReviewServiceImpl.createReview success userId={}, reviewId={}", user.getId(), savedReview.getId());
-        return ReviewResponse.fromEntity(savedReview);
+        Review saved = reviewRepository.save(review);
+        return ReviewResponse.fromEntity(saved);
     }
     @Override
     @Transactional(readOnly = true)
     public List<ReviewResponse> getReviewsByProductDetail(Long productDetailId) {
-        log.info("Inside ReviewServiceImpl.getReviewsByProductDetail productDetailId={}", productDetailId);
 
-        List<Review> reviews = reviewRepository.findByProductDetailIdOrderByCreatedAtDesc(productDetailId);
+        List<Review> reviews =
+                reviewRepository.findReviewsByProductDetailId(productDetailId);
+
         return reviews.stream()
                 .map(ReviewResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -78,21 +104,17 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = true)
     public List<ReviewResponse> getUserReviews(String userEmail) {
-        log.info("Inside ReviewServiceImpl.getUserReviews userEmail={}", userEmail);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-        List<Review> reviews = reviewRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
-
-        return reviews.stream()
+        return reviewRepository.findUserReviews(user.getId())
+                .stream()
                 .map(ReviewResponse::fromEntity)
                 .collect(Collectors.toList());
     }
-
-
     @Override
-    public ReviewResponse updateReview(String userEmail,Long id, UpdateReviewRequest request) {
+    public ReviewResponse updateReview(String userEmail, Long id, UpdateReviewRequest request) {
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -100,22 +122,23 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Review not found"));
 
-        if (!review.getUser().getId().equals(user.getId())) {
+        Long ownerId = review.getOrderDetail()
+                .getOrder()
+                .getUser()
+                .getId();
+
+        if (!ownerId.equals(user.getId())) {
             throw new ErrorException(HttpStatus.FORBIDDEN, "You are not allowed to update this review");
         }
 
         review.setRating(request.getRating());
         review.setContent(request.getContent());
 
-        Review updated = reviewRepository.save(review);
-
-        log.info("Inside ReviewServiceImpl.updateReview success userId={}, reviewId={}", user.getId(), updated.getId());
-        return ReviewResponse.fromEntity(updated);
+        return ReviewResponse.fromEntity(reviewRepository.save(review));
     }
 
     @Override
     public void deleteReview(String userEmail, Long reviewId) {
-        log.info("Inside ReviewServiceImpl.deleteReview userEmail={}, reviewId={}", userEmail, reviewId);
 
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
@@ -123,23 +146,24 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Review not found"));
 
-        if (!review.getUser().getId().equals(user.getId())) {
+        Long ownerId = review.getOrderDetail()
+                .getOrder()
+                .getUser()
+                .getId();
+
+        if (!ownerId.equals(user.getId())) {
             throw new ErrorException(HttpStatus.FORBIDDEN, "You are not allowed to delete this review");
         }
 
         reviewRepository.delete(review);
-        log.info("Inside ReviewServiceImpl.deleteReview success userId={}, reviewId={}", user.getId(), reviewId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByProductId(Long productDetailId) {
-        log.info("Inside ReviewServiceImpl.getReviewsByProductId productDetailId={}", productDetailId);
-        ProductDetail productDetail = productDetailRepository.findById(productDetailId)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found"));
-        Long productId = productDetail.getProduct().getId();
-        List<Review> reviews = reviewRepository.findAllByProductId(productId);
-        return reviews.stream()
+    public List<ReviewResponse> getReviewsByProductId(Long productId) {
+
+        return reviewRepository.findAllByProductId(productId)
+                .stream()
                 .map(ReviewResponse::fromEntity)
                 .collect(Collectors.toList());
     }

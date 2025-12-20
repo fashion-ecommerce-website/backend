@@ -8,6 +8,7 @@ import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.order.repository.OrderRepository;
+import com.spring.fit.backend.order.service.InventoryService;
 import com.spring.fit.backend.order.service.ShipmentService;
 import com.spring.fit.backend.payment.config.StripeProperties;
 import com.spring.fit.backend.payment.domain.dto.PaymentDtos.CheckoutSessionResponse;
@@ -30,12 +31,14 @@ import com.spring.fit.backend.promotion.domain.dto.response.PromotionApplyRespon
 import com.spring.fit.backend.promotion.service.OrderDetailPromotionService;
 import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.common.enums.VoucherUsageStatus;
+import com.spring.fit.backend.user.event.PaymentSuccessEvent;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +61,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderEmailService orderEmailService;
     private final StripeHelper stripeHelper;
     private final ShipmentService shipmentService;
+    private final InventoryService inventoryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public CheckoutSessionResponse createCheckoutSessionFromContext(CreateCheckoutRequest request) {
@@ -71,18 +76,7 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Inside PaymentServiceImpl.createCheckoutSessionFromContext, payment not found with id: " + paymentId));
 
-        // 2. VOUCHER VALIDATION
-        if(payment.getOrder().getVoucher() != null) {
-            VoucherValidateResponse voucherResponse = voucherService.validateVoucher(VoucherValidateRequest.builder()
-                    .code(payment.getOrder().getVoucher().getCode())
-                    .subtotal(payment.getOrder().getSubtotalAmount().doubleValue())
-                    .build(), payment.getOrder().getUser().getId());
-            if(!voucherResponse.isValid()) {
-                throw new ErrorException(HttpStatus.BAD_REQUEST, voucherResponse.getMessage());
-            }
-        }
-        
-        // 3. ORDER DATA EXTRACTION
+        // 2. ORDER DATA EXTRACTION
         var rows = paymentRepository.findOrderAndItemsByPaymentId(paymentId);
         if (rows.isEmpty()) {
             throw new ErrorException(HttpStatus.NOT_FOUND, "Order items not found for payment");
@@ -98,7 +92,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Inside PaymentServiceImpl.createCheckoutSessionFromContext, Total amount: {}, Discount amount: {} , Shipping fee: {}", 
         totalAmount, discountAmount, shippingFee);
 
-        // 4. URL CONFIGURATION
+        // 3. URL CONFIGURATION
         String successUrl = request.getSuccessUrl();
         String cancelUrl = request.getCancelUrl();
         
@@ -118,7 +112,7 @@ public class PaymentServiceImpl implements PaymentService {
             cancelUrl = "http://localhost:3000/payment/cancel";
         }
 
-        // 5. STRIPE SESSION CREATION
+        // 4. STRIPE SESSION CREATION
         try {
             // Initialize Stripe session parameters
             SessionCreateParams.Builder paramsBuilder = SessionCreateParams.builder()
@@ -147,13 +141,11 @@ public class PaymentServiceImpl implements PaymentService {
                 SessionCreateParams.LineItem.PriceData.ProductData productData = SessionCreateParams.LineItem.PriceData.ProductData
                         .builder().setName(name).build();
 
-                // Convert price to smallest currency unit (no decimals for VND)
-
                 var applyReq = PromotionApplyRequest.builder()
                 .skuId(detailId)
                 .basePrice(unitPrice)
                 .build();
-                PromotionApplyResponse applyRes = promotionService.applyBestPromotionForSku(applyReq);
+                PromotionApplyResponse applyRes = promotionService.applyPromotionForSku(applyReq);
         
                 // Create price data for the line item
                 SessionCreateParams.LineItem.PriceData priceData = SessionCreateParams.LineItem.PriceData.builder()
@@ -332,22 +324,26 @@ public class PaymentServiceImpl implements PaymentService {
             Order order = orderRepository.findByIdWithVoucher(orderId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
             
-            // 1: Apply voucher if voucher was applied to the order
-            log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Order {} voucher check: {}", orderId, order.getVoucher());
-            if (order.getVoucher() != null) {
-                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Applying voucher {} for order {}", order.getVoucher().getCode(), orderId);
-                voucherService.applyVoucher(VoucherValidateRequest.builder()
-                        .code(order.getVoucher().getCode())
-                        .subtotal(order.getSubtotalAmount().doubleValue())
-                        .build(), order.getUser().getId(), order.getId());
-            } else {
-                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, No voucher found for order {}", orderId);
+            // Check if this order was previously cancelled and needs stock deduction
+            if (order.getPaymentStatus() == PaymentStatus.CANCELLED) {
+                log.info("Order {} was previously cancelled, checking and deducting stock again", orderId);
+                
+                // Check if there's enough stock before deducting
+                if (!inventoryService.hasEnoughStockForOrder(order)) {
+                    log.error("Insufficient stock for previously cancelled order {}", orderId);
+                    throw new ErrorException(HttpStatus.BAD_REQUEST, 
+                            "Insufficient stock available for this order. Some products may have been sold out.");
+                }
+                
+                // Deduct stock for previously cancelled order
+                inventoryService.deductStockForOrder(order);
+                log.info("Successfully deducted stock for previously cancelled order {}", orderId);
             }
 
-            // 2: Create OrderDetailPromotion records for order details with promotionId
+            // Create OrderDetailPromotion records for order details with promotionId
             orderDetailPromotionService.createPromotionsForOrder(order);
 
-            // 3: Set payment status to PAID
+            // Set payment status to PAID
             order.setPaymentStatus(PaymentStatus.PAID);
             Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
                     .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
@@ -363,34 +359,59 @@ public class PaymentServiceImpl implements PaymentService {
             
             orderRepository.save(order);
             
-            // 4: Create shipment with tracking after payment success
-            try {
-                shipmentService.createShipmentForOrder(order, null); // null = use default carrier
-                log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Shipment created for order: {}", orderId);
-            } catch (Exception e) {
-                log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to create shipment for order {}: {}", orderId, e.getMessage());
-                // Don't fail payment if shipment creation fails - can retry later
-            }
+            // Publish payment success event for user ranking
+            eventPublisher.publishEvent(new PaymentSuccessEvent(
+                    order.getUser().getId(), 
+                    orderId, 
+                    order.getTotalAmount()));
+            log.info("Published PaymentSuccessEvent for user: {}, order: {}, amount: {}", 
+                    order.getUser().getId(), orderId, order.getTotalAmount());
             
             // Send order confirmation email to user (non-blocking)
             orderEmailService.sendOrderDetailsEmail(order);
             log.info("Inside PaymentServiceImpl.handlePaymentSucceeded, Successfully sent order confirmation email to user: {}", orderId);
         } catch (Exception e) {
             log.error("Inside PaymentServiceImpl.handlePaymentSucceeded, Failed to process payment success for order {}: {}", orderId, e.getMessage(), e);
+            throw e; // Re-throw to ensure proper error handling
         }
     }
 
     private void handlePaymentFailed(Long orderId, String provider, String transactionNo, String reason) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
-        order.setPaymentStatus(PaymentStatus.UNPAID);
-        Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
-                .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
-        payment.setProvider(provider);
-        payment.setTransactionNo(transactionNo);
-        payment.setStatus(PaymentStatus.CANCELLED);
-        paymentRepository.save(payment);
-        orderRepository.save(order);
+        log.info("Inside PaymentServiceImpl.handlePaymentFailed, Order ID: {}, Reason: {}", orderId, reason);
+        
+        try {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order not found with id: " + orderId));
+            
+            // Only restore stock if payment status is not already CANCELLED
+            // This prevents double restoration if multiple failed events are received
+            if (order.getPaymentStatus() != PaymentStatus.CANCELLED) {
+                log.info("Restoring stock for failed payment, order: {}", orderId);
+                inventoryService.restoreStockForOrder(order);
+                log.info("Successfully restored stock for order: {}", orderId);
+            } else {
+                log.info("Order {} already has CANCELLED status, skipping stock restoration", orderId);
+            }
+            
+            // Update payment status
+            order.setPaymentStatus(PaymentStatus.CANCELLED);
+            Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(orderId)
+                    .orElse(Payment.builder().order(order).amount(order.getTotalAmount()).build());
+            payment.setProvider(provider);
+            payment.setTransactionNo(transactionNo);
+            payment.setStatus(PaymentStatus.CANCELLED);
+            
+            // Cancel voucher usage if any
+            voucherService.cancelVoucherUsageByOrderId(orderId);
+            
+            paymentRepository.save(payment);
+            orderRepository.save(order);
+            
+            log.info("Successfully processed payment failure for order: {}", orderId);
+        } catch (Exception e) {
+            log.error("Failed to process payment failure for order {}: {}", orderId, e.getMessage(), e);
+            // Don't re-throw here to avoid breaking webhook processing
+        }
     }
 
     private void handleCheckoutSessionCompleted(Event event) {

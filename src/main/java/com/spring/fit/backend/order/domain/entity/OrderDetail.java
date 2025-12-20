@@ -1,6 +1,7 @@
 package com.spring.fit.backend.order.domain.entity;
 
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
+import com.spring.fit.backend.review.domain.entity.Review;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,6 +53,9 @@ public class OrderDetail {
 
     @Column(name = "promotion_id")
     private Long promotionId;
+
+    @OneToOne(mappedBy = "orderDetail", fetch = FetchType.LAZY)
+    private Review review;
 
     @PrePersist
     @PreUpdate

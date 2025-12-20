@@ -1,7 +1,11 @@
 package com.spring.fit.backend.user.controller;
 
+import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
+import com.spring.fit.backend.user.domain.dto.response.UserRankResponse;
+import com.spring.fit.backend.user.service.UserRankService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,6 +16,8 @@ import com.spring.fit.backend.user.domain.dto.response.UserResponse;
 import com.spring.fit.backend.user.service.UserService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
@@ -23,6 +29,7 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final UserRankService userRankService;
 
     @GetMapping()
     public ResponseEntity<UserResponse> getCurrentUser() {
@@ -32,8 +39,17 @@ public class UserController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        List<UserResponse> users = userService.getAllUsers();
+    public ResponseEntity<PageResult<UserResponse>> getAllUsers(
+            @RequestParam(defaultValue = "0")
+            @Min(value = 0, message = "Page must be >= 0")
+            @Max(value = 100, message = "Page cannot exceed 100")
+            int page,
+
+            @RequestParam(defaultValue = "10")
+            @Min(value = 1, message = "PageSize must be >= 1")
+            @Max(value = 100, message = "PageSize cannot exceed 100")
+            int pageSize) {
+        PageResult<UserResponse> users = userService.getAllUsers(page, pageSize);
         return ResponseEntity.ok(users);
     }
 
@@ -81,4 +97,5 @@ public class UserController {
         userService.clearRecentlyViewedProducts(email);
         return ResponseEntity.ok().build();
     }
+
 }

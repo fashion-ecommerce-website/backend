@@ -118,4 +118,65 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // Sum total revenue by date
         @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE o.created_at >= :date AND o.created_at < :nextDate", nativeQuery = true)
         BigDecimal sumTotalRevenueByDate(@Param("date") LocalDateTime date, @Param("nextDate") LocalDateTime nextDate);
+
+        // Count orders by month and year
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND EXTRACT(MONTH FROM o.created_at) = :month", nativeQuery = true)
+        Long countOrdersByMonthAndYear(@Param("year") int year, @Param("month") int month);
+
+        // Count orders by month, year and status
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND EXTRACT(MONTH FROM o.created_at) = :month AND o.status = :status", nativeQuery = true)
+        Long countOrdersByMonthYearAndStatus(@Param("year") int year, @Param("month") int month, @Param("status") String status);
+
+        // Sum revenue by month, year and payment status
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND EXTRACT(MONTH FROM o.created_at) = :month AND o.payment_status = :paymentStatus", nativeQuery = true)
+        BigDecimal sumRevenueByMonthYearAndPaymentStatus(@Param("year") int year, @Param("month") int month, @Param("paymentStatus") String paymentStatus);
+
+        // Sum total revenue by month and year
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND EXTRACT(MONTH FROM o.created_at) = :month", nativeQuery = true)
+        BigDecimal sumTotalRevenueByMonthAndYear(@Param("year") int year, @Param("month") int month);
+
+        // Count orders by year
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year", nativeQuery = true)
+        Long countOrdersByYear(@Param("year") int year);
+
+        // Count orders by year and status
+        @Query(value = "SELECT COUNT(o.*) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND o.status = :status", nativeQuery = true)
+        Long countOrdersByYearAndStatus(@Param("year") int year, @Param("status") String status);
+
+        // Sum revenue by year and payment status
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year AND o.payment_status = :paymentStatus", nativeQuery = true)
+        BigDecimal sumRevenueByYearAndPaymentStatus(@Param("year") int year, @Param("paymentStatus") String paymentStatus);
+
+        // Sum total revenue by year
+        @Query(value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE EXTRACT(YEAR FROM o.created_at) = :year", nativeQuery = true)
+        BigDecimal sumTotalRevenueByYear(@Param("year") int year);
+
+        /**
+         * Find order history with shipment status for size recommendation.
+         * Returns individual orders with userId for similarity-weighted calculation.
+         * 
+         * Returns: userId, sizeLabel, shipmentStatus, orderStatus, rating, purchaseDate
+         */
+        @Query("""
+    SELECT 
+        o.user.id AS userId,
+        od.sizeLabel AS sizeLabel,
+        COALESCE(s.status, 'PENDING') AS shipmentStatus,
+        o.status AS orderStatus,
+        COALESCE(r.rating, 0) AS rating,
+        o.createdAt AS purchaseDate
+    FROM Order o
+    JOIN o.orderDetails od
+    JOIN od.productDetail pd
+    LEFT JOIN o.shipments s
+    LEFT JOIN od.review r
+    WHERE o.user.id IN :userIds
+      AND pd.product.id = :productId
+    ORDER BY o.createdAt DESC
+""")
+        List<Object[]> findOrderHistoryWithShipmentStatus(
+                @Param("userIds") List<Long> userIds,
+                @Param("productId") Long productId
+        );
+
 }

@@ -59,4 +59,6 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
         """)
     List<Category> findAllActiveCategoriesWithRelations();
 
+    @Query("SELECT COUNT(c) > 0 FROM Category c WHERE c.id = :id AND c.isActive = true")
+    boolean existsActiveById(@Param("id") Long id);
 }

@@ -13,23 +13,37 @@ import java.util.Optional;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
-    List<Review> findByProductDetailId(Long productDetailId);
-
-    Optional<Review> findByUserIdAndProductDetailId(Long userId, Long productDetailId);
-
-    boolean existsByUserIdAndProductDetailId(Long userId, Long productDetailId);
-
-    List<Review> findByProductDetailIdOrderByCreatedAtDesc(Long productDetailId);
-
-    List<Review> findByUserIdOrderByCreatedAtDesc(Long userId);
+    @Query("""
+    select r from Review r
+    join r.orderDetail od
+    join od.productDetail pd
+    where pd.id = :productDetailId
+    order by r.createdAt desc
+""")
+    List<Review> findReviewsByProductDetailId(
+            @Param("productDetailId") Long productDetailId
+    );
 
     @Query("""
-    SELECT r FROM Review r
-    JOIN r.productDetail pd
-    WHERE pd.product.id = :productId
-    ORDER BY r.createdAt DESC
+    select r from Review r
+    join r.orderDetail od
+    where od.order.user.id = :userId
+    order by r.createdAt desc
 """)
-    List<Review> findAllByProductId(@Param("productId") Long productId);
+    List<Review> findUserReviews(
+            @Param("userId") Long userId
+    );
 
+
+    @Query("""
+    select r from Review r
+    join r.orderDetail od
+    join od.productDetail pd
+    where pd.product.id = :productId
+    order by r.createdAt desc
+""")
+    List<Review> findAllByProductId(
+            @Param("productId") Long productId
+    );
 
 }

@@ -15,4 +15,10 @@ public interface ProductCardView {
     List<String> getColors();
 
     List<String> getImageUrls();
+    
+    // Promotion fields
+    BigDecimal getFinalPrice();
+    Integer getPercentOff();
+    Long getPromotionId();
+    String getPromotionName();
 }

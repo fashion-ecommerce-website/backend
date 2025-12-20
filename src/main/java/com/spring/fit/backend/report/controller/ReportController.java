@@ -28,8 +28,8 @@ public class ReportController {
     }
 
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardResponse> getDashboard(@RequestParam(defaultValue = "week") String period) {
-            DashboardResponse dashboard = dashboardService.getDashboardData(PeriodType.fromString(period));
+    public ResponseEntity<DashboardResponse> getDashboard(@RequestParam(defaultValue = "MONTH") String period) {
+            DashboardResponse dashboard = dashboardService.getDashboardData(PeriodType.valueOf(period));
             return ResponseEntity.ok(dashboard);
     }
 

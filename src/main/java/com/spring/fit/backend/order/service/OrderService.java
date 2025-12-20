@@ -24,4 +24,14 @@ public interface OrderService {
 
     Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus, String sortBy, String direction, Pageable pageable);
     
+    /**
+     * Cancel an order and restore stock
+     * Only allows cancelling orders with UNPAID or CANCELLED payment status
+     * 
+     * @param orderId The order ID to cancel
+     * @param userId The user ID (for authorization)
+     * @return Updated order response
+     */
+    OrderResponse cancelOrder(Long orderId, Long userId);
+    
 }

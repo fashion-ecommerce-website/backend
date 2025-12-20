@@ -27,7 +27,7 @@ public class ModelTrainingScheduler {
      * - *: tháng (mọi tháng)
      * - SUN: thứ trong tuần (Chủ nhật)
      */
-    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(cron = "0 0 0 * * SUN")
     public void scheduleWeeklyModelTraining() {
         log.info("Scheduled weekly model training started");
         try {
