@@ -20,10 +20,12 @@ public class ProductImportController {
 
     @PostMapping("/zip-preview")
     public ResponseEntity<List<ProductGroupResponse>> importProductsWithZips(
-            @RequestParam("csv") MultipartFile csv,
+            @RequestParam("excel") MultipartFile excelFile,
             @RequestParam("zips") List<MultipartFile> zips) {
-
-        List<ProductGroupResponse> preview = productImportService.parseCsvWithZips(csv, zips);
+        System.out.println("=== CSV: " + excelFile.getOriginalFilename());
+        System.out.println("=== ZIP COUNT: " + zips.size());
+        zips.forEach(z -> System.out.println("ZIP FILE: " + z.getOriginalFilename()));
+        List<ProductGroupResponse> preview = productImportService.parseCsvWithZips(excelFile, zips);
         return ResponseEntity.ok(preview);
     }
 

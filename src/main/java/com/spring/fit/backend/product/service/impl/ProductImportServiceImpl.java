@@ -16,6 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,26 +52,27 @@ public class ProductImportServiceImpl implements ProductImportService {
     private final ImageService imageService;
 
     @Override
-    public List<ProductGroupResponse> parseCsvWithZips(MultipartFile csvFile, List<MultipartFile> zipFiles) {
+    public List<ProductGroupResponse> parseCsvWithZips(
+            MultipartFile excelFile,
+            List<MultipartFile> zipFiles
+    ) {
+
         Map<String, Map<String, List<File>>> zipImageMap = new HashMap<>();
-        Map<String, Integer> counterMap = new HashMap<>(); // đếm số ảnh theo title-color
+        Map<String, Integer> counterMap = new HashMap<>();
 
         try {
-            // 1️⃣ Duyệt tất cả ZIP
+            // ================= ZIP =================
             for (MultipartFile zip : zipFiles) {
                 Path tempDir = Files.createTempDirectory("zip-import-");
-                log.info("Temp dir created at {}", tempDir.toAbsolutePath());
-
                 unzipMultiple(zip.getInputStream(), tempDir, counterMap);
-                Map<String, Map<String, List<File>>> map = buildZipImageMap(tempDir);
 
-                // merge vào zipImageMap
+                Map<String, Map<String, List<File>>> map = buildZipImageMap(tempDir);
                 map.forEach((title, colorMap) ->
                         zipImageMap.merge(title, colorMap, (oldMap, newMap) -> {
                             newMap.forEach((color, files) ->
-                                    oldMap.merge(color, files, (oldFiles, newFiles) -> {
-                                        oldFiles.addAll(newFiles);
-                                        return oldFiles;
+                                    oldMap.merge(color, files, (o, n) -> {
+                                        o.addAll(n);
+                                        return o;
                                     })
                             );
                             return oldMap;
@@ -74,77 +80,72 @@ public class ProductImportServiceImpl implements ProductImportService {
                 );
             }
 
-            // 2️⃣ Đọc CSV
-            List<CSVRecord> records = readCsv(csvFile);
-            log.info("CSV record count: {}", records.size());
+            // ================= EXCEL =================
+            List<Map<String, String>> records = readExcel(excelFile);
+            log.info("Excel rows: {}", records.size());
 
-            Map<String, ProductGroupResponse> groupedProducts = new HashMap<>();
-            Set<String> fileUniqueCheck = new HashSet<>(); // set để check duplicate trong file
+            Map<String, ProductGroupResponse> grouped = new HashMap<>();
+            Set<String> duplicateCheck = new HashSet<>();
 
-            for (CSVRecord r : records) {
+            for (Map<String, String> r : records) {
+
                 String title = r.get("Product Title").trim();
                 String desc = r.get("Description").trim();
                 String categoryName = r.get("Category").trim();
                 String color = r.get("Color").trim();
                 String size = r.get("Size").trim();
-                Integer quantity = r.isMapped("Quantity") && !r.get("Quantity").isBlank()
-                        ? Integer.valueOf(r.get("Quantity"))
-                        : 0;
-                BigDecimal price = r.isMapped("Price") && !r.get("Price").isBlank()
-                        ? new BigDecimal(r.get("Price"))
-                        : BigDecimal.ZERO;
 
-                // 3️⃣ Lấy file từ ZIP map
+                Integer quantity = r.get("Quantity").isBlank()
+                        ? 0
+                        : Integer.valueOf(r.get("Quantity"));
+
+                BigDecimal price = r.get("Price").isBlank()
+                        ? BigDecimal.ZERO
+                        : new BigDecimal(r.get("Price"));
+
                 List<File> files = Optional.ofNullable(zipImageMap.get(title))
                         .map(m -> m.get(color))
                         .orElse(Collections.emptyList());
 
-                // 4️⃣ Tạo detail
                 ProductDetailPreviewResponse detail = new ProductDetailPreviewResponse();
                 detail.setColor(color);
                 detail.setSize(size);
                 detail.setQuantity(quantity);
                 detail.setPrice(price);
                 detail.setLocalFiles(new ArrayList<>(files));
-                // Convert files to Base64 data URLs for frontend preview
-                detail.setImageUrls(files.stream()
-                        .map(this::fileToBase64DataUrl)
-                        .filter(Objects::nonNull)
-                        .toList());
+                detail.setImageUrls(
+                        files.stream()
+                                .map(this::fileToBase64DataUrl)
+                                .filter(Objects::nonNull)
+                                .toList()
+                );
 
-                // 5️⃣ Validate cơ bản
                 validateDetail(detail, categoryName, title, desc);
 
-                // 6️⃣ Validate duplicate trong file
                 String uniqueKey = title.toLowerCase() + "::" + color.toLowerCase() + "::" + size.toLowerCase();
-                if (fileUniqueCheck.contains(uniqueKey)) {
+                if (!duplicateCheck.add(uniqueKey)) {
                     detail.setError(true);
-                    String msg = detail.getErrorMessage() != null ? detail.getErrorMessage() + " " : "";
-                    detail.setErrorMessage(msg + "Duplicate in CSV/ZIP: " + uniqueKey);
-                } else {
-                    fileUniqueCheck.add(uniqueKey);
+                    detail.setErrorMessage("Duplicate in Excel/ZIP: " + uniqueKey);
                 }
 
-                // 7️⃣ Validate duplicate trong DB
-                boolean existsInDb = productDetailRepository.existsByProductTitleAndColorAndSize(title, color, size);
-                if (existsInDb) {
+                if (productDetailRepository.existsByProductTitleAndColorAndSize(title, color, size)) {
                     detail.setError(true);
-                    String msg = detail.getErrorMessage() != null ? detail.getErrorMessage() + " " : "";
-                    detail.setErrorMessage(msg + "Already exists in DB");
+                    detail.setErrorMessage("Already exists in DB");
                 }
 
-                // 8️⃣ Group
-                String key = title + "::" + desc + "::" + categoryName;
-                groupedProducts.putIfAbsent(key, new ProductGroupResponse(title, desc, categoryName));
-                groupedProducts.get(key).addDetail(detail);
+                String groupKey = title + "::" + desc + "::" + categoryName;
+                grouped.putIfAbsent(groupKey, new ProductGroupResponse(title, desc, categoryName));
+                grouped.get(groupKey).addDetail(detail);
             }
 
-            return new ArrayList<>(groupedProducts.values());
+            return new ArrayList<>(grouped.values());
 
-        } catch (Exception ex) {
-            throw new RuntimeException("Error parsing CSV + multiple ZIPs: " + ex.getMessage(), ex);
+        } catch (Exception e) {
+            log.error("IMPORT ERROR", e);
+            throw new RuntimeException("Error import Excel + ZIP", e);
         }
     }
+
 
 
     @Override
@@ -350,17 +351,50 @@ public class ProductImportServiceImpl implements ProductImportService {
         return map;
     }
 
-    private List<CSVRecord> readCsv(MultipartFile file) throws IOException {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+    private List<Map<String, String>> readExcel(MultipartFile file) throws IOException {
 
-            CSVParser parser = CSVFormat.DEFAULT
-                    .withDelimiter(';')
-                    .withFirstRecordAsHeader()
-                    .parse(reader);
+        List<Map<String, String>> rows = new ArrayList<>();
 
-            return parser.getRecords();
+        try (Workbook wb = new XSSFWorkbook(file.getInputStream())) {
+            Sheet sheet = wb.getSheetAt(0);
+
+            Row headerRow = sheet.getRow(0);
+            Map<Integer, String> headers = new HashMap<>();
+
+            for (Cell c : headerRow) {
+                headers.put(c.getColumnIndex(), c.getStringCellValue().trim());
+            }
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                Map<String, String> data = new HashMap<>();
+                for (Cell c : row) {
+                    data.put(headers.get(c.getColumnIndex()), getCellValue(c));
+                }
+                rows.add(data);
+            }
+            log.info("Excel file name: {}", file.getOriginalFilename());
+            log.info("Excel content type: {}", file.getContentType());
         }
+        return rows;
+    }
+    private String getCellValue(Cell c) {
+        if (c == null) return "";
+
+        return switch (c.getCellType()) {
+            case STRING -> c.getStringCellValue().trim();
+            case NUMERIC -> {
+                double d = c.getNumericCellValue();
+                if (d == Math.floor(d)) {
+                    yield String.valueOf((int) d); // 5.0 -> "5"
+                }
+                yield BigDecimal.valueOf(d).toPlainString();
+            }
+            case BOOLEAN -> String.valueOf(c.getBooleanCellValue());
+            default -> "";
+        };
     }
 
     private void validateDetail(ProductDetailPreviewResponse d,
