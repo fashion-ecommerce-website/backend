@@ -98,12 +98,4 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    // ==================== Admin User Rank APIs ====================
-
-    @GetMapping("/ranks")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserRankResponse>> getAllUserRanks() {
-        List<UserRankResponse> userRanks = userRankService.getAllUserRanks();
-        return ResponseEntity.ok(userRanks);
-    }
 }

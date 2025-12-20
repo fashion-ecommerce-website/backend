@@ -123,12 +123,12 @@ public class PromotionServiceImpl implements PromotionService {
                 validateNoSkuConflict(target, request.getStartAt(), request.getEndAt(), id);
             }
 
-            // Xóa tất cả targets cũ
-            promotionTargetRepository.deleteByPromotion_Id(id);
+            // Xóa tất cả targets cũ 
+            p.getPromotionTargets().clear();
 
             // Thêm targets mới
             applyRequestToEntity(request, p);
-            Promotion saved = promotionRepository.save(p);
+            Promotion saved = promotionRepository.saveAndFlush(p);
 
             if (!request.getTargets().isEmpty()) {
                 createTargetsForPromotion(saved, request.getTargets());
