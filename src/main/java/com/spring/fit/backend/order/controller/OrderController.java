@@ -108,7 +108,7 @@ public class OrderController {
     }
 
     // Cancel order
-    @PutMapping("/{id}/cancel")
+    @PostMapping("/{id}/cancel")
     public ResponseEntity<OrderResponse> cancelOrder(@PathVariable Long id) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity user = userRepository.findByEmail(email)
