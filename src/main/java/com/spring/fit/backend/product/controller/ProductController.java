@@ -102,6 +102,19 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/best-sellers")
+    public ResponseEntity<List<ProductCardWithPromotionResponse>> getTopSellingProducts() {
+        log.info("Inside ProductController.getTopSellingProducts");
+        try {
+            List<ProductCardWithPromotionResponse> result = productService.getTopSellingProducts();
+            log.info("Inside ProductController.getTopSellingProducts success count={}", result.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Inside ProductController.getTopSellingProducts error={}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
     @GetMapping("/discounted")
     public ResponseEntity<PageResult<ProductCardWithPromotionResponse>> getDiscountedProducts(
             @RequestParam(required = false)

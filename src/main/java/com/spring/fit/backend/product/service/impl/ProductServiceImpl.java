@@ -1675,4 +1675,53 @@ public class ProductServiceImpl implements ProductService {
             throw new RuntimeException("Error when getting new arrivals by root categories", e);
         }
     }
+
+    @Override
+    public List<ProductCardWithPromotionResponse> getTopSellingProducts() {
+        log.info("Inside ProductServiceImpl.getTopSellingProducts");
+        try {
+            List<ProductCardView> products = productRepository.findTopSellingProducts();
+            
+            List<ProductCardWithPromotionResponse> enrichedProducts = products.stream()
+                    .map(card -> {
+                        var applyRes = PromotionApplyResponse.builder().build();
+                        try {
+                            var applyReq = PromotionApplyRequest.builder()
+                                    .skuId(card.getDetailId())
+                                    .basePrice(card.getPrice())
+                                    .build();
+                            applyRes = promotionService.applyPromotionForSku(applyReq);
+                        } catch (Exception ex) {
+                            applyRes = PromotionApplyResponse.builder()
+                                    .basePrice(card.getPrice())
+                                    .finalPrice(card.getPrice())
+                                    .percentOff(0)
+                                    .build();
+                        }
+                        return ProductCardWithPromotionResponse.builder()
+                                .productId(card.getProductId())
+                                .detailId(card.getDetailId())
+                                .productTitle(card.getProductTitle())
+                                .productSlug(card.getProductSlug())
+                                .colorName(card.getColorName())
+                                .price(card.getPrice())
+                                .finalPrice(applyRes.getFinalPrice())
+                                .percentOff(applyRes.getPercentOff())
+                                .promotionId(applyRes.getPromotionId())
+                                .promotionName(applyRes.getPromotionName())
+                                .quantity(card.getQuantity())
+                                .colors(card.getColors())
+                                .imageUrls(card.getImageUrls())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+            
+            log.info("Inside ProductServiceImpl.getTopSellingProducts success count={}", enrichedProducts.size());
+            return enrichedProducts;
+        } catch (Exception e) {
+            log.error("Inside ProductServiceImpl.getTopSellingProducts error={}", e.getMessage(), e);
+            throw new RuntimeException("Error getting top selling products", e);
+        }
+    }
+
 }

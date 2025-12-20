@@ -87,4 +87,25 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
     boolean existsActiveById(@Param("id") Long id);
 
     List<Product> findByIsActiveTrue();
+
+    /**
+     * Get top selling products based on total quantity sold from paid orders
+     * Only includes orders with PaymentStatus.PAID
+     */
+    @Query("""
+        SELECT p.id as productId,
+               p.title as title,
+               p.description as description,
+               COALESCE(SUM(od.quantity), 0) as totalQuantitySold,
+               COALESCE(SUM(od.totalPrice), 0) as totalRevenue,
+               COALESCE(AVG(od.unitPrice), 0) as averagePrice
+        FROM Product p
+        LEFT JOIN p.details pd
+        LEFT JOIN OrderDetail od ON od.productDetail.id = pd.id
+        LEFT JOIN od.order o ON o.paymentStatus = 'PAID'
+        WHERE p.isActive = true
+        GROUP BY p.id, p.title, p.description
+        ORDER BY COALESCE(SUM(od.quantity), 0) DESC
+        """)
+    List<Object[]> findTopSellingProducts(Pageable pageable);
 }

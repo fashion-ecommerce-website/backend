@@ -71,5 +71,7 @@ public interface ProductService {
     List<ProductDetailSimpleResponse> getAllProductDetailsSimple();
 
     List<NewArrivalsResponse> getNewArrivalsByRootCategories(String categorySlug, int limit);
-}
 
+    List<ProductCardWithPromotionResponse> getTopSellingProducts();
+
+}

@@ -2,10 +2,13 @@ package com.spring.fit.backend.order.service.impl;
 
 import com.spring.fit.backend.common.enums.FulfillmentStatus;
 import com.spring.fit.backend.common.enums.OrderStatus;
+import com.spring.fit.backend.common.enums.PaymentMethod;
+import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.order.domain.dto.tracking.TrackingEventData;
 import com.spring.fit.backend.order.domain.dto.tracking.TrackingEventResponse;
 import com.spring.fit.backend.order.domain.dto.tracking.TrackingResponse;
+import com.spring.fit.backend.order.domain.entity.Order;
 import com.spring.fit.backend.order.domain.entity.Shipment;
 import com.spring.fit.backend.order.domain.entity.TrackingEvent;
 import com.spring.fit.backend.order.repository.OrderRepository;
@@ -14,6 +17,8 @@ import com.spring.fit.backend.order.repository.TrackingEventRepository;
 import com.spring.fit.backend.order.service.TrackingService;
 import com.spring.fit.backend.order.service.carrier.CarrierService;
 import com.spring.fit.backend.order.service.carrier.CarrierServiceFactory;
+import com.spring.fit.backend.payment.domain.entity.Payment;
+import com.spring.fit.backend.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -34,6 +39,7 @@ public class TrackingServiceImpl implements TrackingService {
     private final TrackingEventRepository trackingEventRepository;
     private final CarrierServiceFactory carrierServiceFactory;
     private final OrderRepository orderRepository;
+    private final PaymentRepository paymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -98,11 +104,53 @@ public class TrackingServiceImpl implements TrackingService {
 
         if (newStatus == OrderStatus.DELIVERED && shipment.getDeliveredAt() == null) {
             shipment.setDeliveredAt(LocalDateTime.now());
-            shipment.getOrder().setStatus(FulfillmentStatus.FULFILLED);
-            orderRepository.save(shipment.getOrder());
+            
+            // Update order fulfillment status
+            Order order = shipment.getOrder();
+            order.setStatus(FulfillmentStatus.FULFILLED);
+            
+            // Handle COD payment - update payment status from UNPAID to PAID when delivered
+            handleCODPaymentOnDelivery(order);
+            
+            orderRepository.save(order);
         }
 
         shipmentRepository.save(shipment);
+    }
+
+    private void handleCODPaymentOnDelivery(Order order) {
+        try {
+            // Check if order has COD payment method and is still UNPAID
+            if (order.getPaymentStatus() == PaymentStatus.UNPAID) {
+                // Get the payment for this order
+                Payment payment = paymentRepository.findFirstByOrder_IdOrderByIdDesc(order.getId())
+                        .orElse(null);
+                
+                if (payment != null && payment.getMethod() == PaymentMethod.CASH_ON_DELIVERY) {
+                    log.info("Processing COD payment for delivered order: {}", order.getId());
+                    
+                    // Update payment status to PAID
+                    payment.setStatus(PaymentStatus.PAID);
+                    payment.setPaidAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
+                    
+                    // Update order payment status
+                    order.setPaymentStatus(PaymentStatus.PAID);
+                    
+                    log.info("Successfully updated COD payment status to PAID for order: {}", order.getId());
+                } else if (payment != null) {
+                    log.debug("Order {} has payment method {} - not COD, skipping payment update", 
+                            order.getId(), payment.getMethod());
+                } else {
+                    log.warn("No payment found for order: {}", order.getId());
+                }
+            } else {
+                log.debug("Order {} already has payment status: {} - skipping payment update", 
+                        order.getId(), order.getPaymentStatus());
+            }
+        } catch (Exception e) {
+            log.error("Failed to process COD payment for order {}: {}", order.getId(), e.getMessage(), e);
+        }
     }
 
     private void persistTrackingEvents(Shipment shipment, List<TrackingEventData> events) {

@@ -703,4 +703,59 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
             @Param("rootCategoryId") Long rootCategoryId,
             @Param("limit") int limit
     );
+
+    @Query(value = """
+        WITH top_selling AS (
+            SELECT pd.product_id, SUM(od.quantity) as total_sold
+            FROM order_details od
+            JOIN product_details pd ON pd.id = od.detail_id
+            GROUP BY pd.product_id
+            ORDER BY total_sold DESC
+            LIMIT 10
+        ),
+        representative_details AS (
+            SELECT DISTINCT ON (d.product_id)
+                d.id as detail_id,
+                d.product_id,
+                d.color_id,
+                d.price,
+                d.slug as product_slug,
+                d.quantity,
+                p.title as product_title,
+                c.name as color_name
+            FROM product_details d
+            JOIN top_selling ts ON ts.product_id = d.product_id
+            JOIN products p ON p.id = d.product_id
+            JOIN colors c ON c.id = d.color_id
+            WHERE d.is_active = TRUE AND p.is_active = TRUE
+            ORDER BY d.product_id, d.price ASC
+        )
+        SELECT
+            rd.product_id as productId,
+            rd.detail_id as detailId,
+            rd.product_title as productTitle,
+            rd.product_slug as productSlug,
+            rd.color_name as colorName,
+            rd.price as price,
+            rd.quantity as quantity,
+            (SELECT ARRAY(
+               SELECT DISTINCT c2.name
+               FROM product_details d2
+               JOIN colors c2 ON c2.id = d2.color_id
+               WHERE d2.product_id = rd.product_id AND d2.is_active = TRUE
+               ORDER BY c2.name
+            )) as colors,
+            (SELECT ARRAY(
+               SELECT i.url
+               FROM product_images pi
+               JOIN images i ON i.id = pi.image_id
+               WHERE pi.detail_id = rd.detail_id
+               ORDER BY pi.created_at
+               LIMIT 2
+            )) as imageUrls
+        FROM representative_details rd
+        JOIN top_selling ts ON ts.product_id = rd.product_id
+        ORDER BY ts.total_sold DESC
+        """, nativeQuery = true)
+    List<ProductCardView> findTopSellingProducts();
 }
