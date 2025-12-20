@@ -1,7 +1,9 @@
 package com.spring.fit.backend.product.repository;
 
 import com.spring.fit.backend.product.domain.entity.ProductDetail;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -135,6 +137,14 @@ public interface ProductDetailRepository extends JpaRepository<ProductDetail, Lo
         WHERE pd.product.id = :productId AND pd.color.id = :colorId
         """)
     List<ProductDetail> findByProductIdAndColorId(@Param("productId") Long productId, @Param("colorId") Short colorId);
+
+    /**
+     * Find product detail by ID with pessimistic write lock to prevent race conditions
+     * Used in order creation to ensure stock consistency
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT pd FROM ProductDetail pd WHERE pd.id = :id AND pd.isActive = true")
+    Optional<ProductDetail> findActiveProductDetailByIdForUpdate(@Param("id") Long id);
 }
 
 

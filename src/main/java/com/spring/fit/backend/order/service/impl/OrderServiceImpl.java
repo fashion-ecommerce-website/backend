@@ -111,9 +111,10 @@ public class OrderServiceImpl implements OrderService {
                 .voucher(voucher)
                 .build();
 
-        // Create order details and update stock
+        // Create order details and update stock with pessimistic locking
         for (var detailRequest : request.getOrderDetails()) {
-            var productDetail = productDetailRepository.findById(detailRequest.getProductDetailId())
+            // Use pessimistic write lock to prevent race conditions during stock updates
+            var productDetail = productDetailRepository.findActiveProductDetailByIdForUpdate(detailRequest.getProductDetailId())
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND,
                             "Inside OrderServiceImpl.createOrder, product detail not found with id: " + detailRequest.getProductDetailId()));
 

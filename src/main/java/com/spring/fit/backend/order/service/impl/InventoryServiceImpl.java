@@ -69,11 +69,19 @@ public class InventoryServiceImpl implements InventoryService {
             return;
         }
 
-        // First, check if all products have enough stock
+        // Use pessimistic locking to prevent race conditions during stock deduction
         List<String> insufficientStockErrors = new ArrayList<>();
+        List<ProductDetail> lockedProductDetails = new ArrayList<>();
         
+        // First pass: Lock all product details and check stock availability
         for (OrderDetail detail : order.getOrderDetails()) {
-            ProductDetail productDetail = detail.getProductDetail();
+            // Lock the product detail to prevent concurrent modifications
+            ProductDetail productDetail = productDetailRepository.findActiveProductDetailByIdForUpdate(detail.getProductDetail().getId())
+                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
+                            "Product detail not found with id: " + detail.getProductDetail().getId()));
+            
+            lockedProductDetails.add(productDetail);
+            
             int requestedQuantity = detail.getQuantity();
             int currentStock = productDetail.getQuantity();
             
@@ -95,11 +103,13 @@ public class InventoryServiceImpl implements InventoryService {
             throw new ErrorException(HttpStatus.BAD_REQUEST, errorMessage);
         }
         
-        // All products have enough stock, proceed with deduction
+        // Second pass: All products have enough stock, proceed with deduction
         List<String> deductedProducts = new ArrayList<>();
         
-        for (OrderDetail detail : order.getOrderDetails()) {
-            ProductDetail productDetail = detail.getProductDetail();
+        for (int i = 0; i < order.getOrderDetails().size(); i++) {
+            OrderDetail detail = (OrderDetail) order.getOrderDetails().toArray()[i];
+            ProductDetail productDetail = lockedProductDetails.get(i);
+            
             int quantityToDeduct = detail.getQuantity();
             int currentStock = productDetail.getQuantity();
             int newStock = currentStock - quantityToDeduct;
