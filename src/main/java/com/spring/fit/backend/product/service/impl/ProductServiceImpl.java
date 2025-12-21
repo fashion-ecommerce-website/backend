@@ -1487,6 +1487,10 @@ public class ProductServiceImpl implements ProductService {
         // Lấy danh sách màu và size (bao gồm cả inactive cho admin)
         List<ColorResponse> variantColors = new ArrayList<>();
         List<SizeResponse> variantSizes = new ArrayList<>();
+        
+        // Tính totalQuantity và hasOutOfStock
+        int totalQuantity = 0;
+        boolean hasOutOfStock = false;
 
         if (product.getDetails() != null) {
             Map<Short, ColorResponse> colorMap = new HashMap<>();
@@ -1500,10 +1504,16 @@ public class ProductServiceImpl implements ProductService {
                     colorMap.put(color.getId(), mapToColorResponse(color));
                 }
 
-                // Lấy size
                 Size size = detail.getSize();
                 if (!sizeMap.containsKey(size.getId())) {
                     sizeMap.put(size.getId(), mapToSizeResponse(size));
+                }
+                
+                int detailQuantity = detail.getQuantity() != null ? detail.getQuantity() : 0;
+                totalQuantity += detailQuantity;
+                
+                if (detailQuantity == 0) {
+                    hasOutOfStock = true;
                 }
             }
 
@@ -1513,6 +1523,8 @@ public class ProductServiceImpl implements ProductService {
 
         response.setVariantColors(variantColors);
         response.setVariantSizes(variantSizes);
+        response.setTotalQuantity(totalQuantity);
+        response.setHasOutOfStock(hasOutOfStock);
 
         return response;
     }

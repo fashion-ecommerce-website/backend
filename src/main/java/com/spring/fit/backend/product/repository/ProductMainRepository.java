@@ -45,8 +45,13 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
     List<Product> findAllActiveProductsWithDetails();
 
     @Query(value = """
-    SELECT p.*
+    SELECT p.*, COALESCE(qty.total_quantity, 0) AS total_quantity
     FROM products p
+    LEFT JOIN (
+      SELECT pd.product_id, SUM(pd.quantity) AS total_quantity
+      FROM product_details pd
+      GROUP BY pd.product_id
+    ) qty ON qty.product_id = p.id
     JOIN (
       SELECT DISTINCT p.id
       FROM products p
@@ -63,7 +68,9 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
         CASE WHEN :sortField = 'title' AND :sortDirection = 'asc' THEN p.title END ASC,
         CASE WHEN :sortField = 'title' AND :sortDirection = 'desc' THEN p.title END DESC,
         CASE WHEN :sortField = 'createdAt' AND :sortDirection = 'asc' THEN p.created_at END ASC,
-        CASE WHEN :sortField = 'createdAt' AND :sortDirection = 'desc' THEN p.created_at END DESC
+        CASE WHEN :sortField = 'createdAt' AND :sortDirection = 'desc' THEN p.created_at END DESC,
+        CASE WHEN :sortField = 'quantity' AND :sortDirection = 'asc' THEN COALESCE(qty.total_quantity, 0) END ASC,
+        CASE WHEN :sortField = 'quantity' AND :sortDirection = 'desc' THEN COALESCE(qty.total_quantity, 0) END DESC
     """, nativeQuery = true)
     Page<Product> findAllProductsWithFilter(
             @Param("categorySlug") String categorySlug,

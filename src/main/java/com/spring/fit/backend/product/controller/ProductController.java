@@ -236,7 +236,7 @@ public class ProductController {
             @RequestParam(required = false) String title,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(defaultValue = "title") 
-            @Pattern(regexp = "^(title|createdAt)$", message = "Sort field must be 'title' or 'createdAt'")
+            @Pattern(regexp = "^(title|createdAt|quantity)$", message = "Sort field must be 'title', 'createdAt' or 'quantity'")
             String sortBy,
             @RequestParam(defaultValue = "asc")
             @Pattern(regexp = "^(asc|desc)$", message = "Sort direction must be 'asc' or 'desc'")
