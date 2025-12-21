@@ -267,12 +267,23 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus, String sortBy, String direction, Pageable pageable) {
+        return getAllOrdersWithFilters(userId, status, paymentStatus, null, sortBy, direction, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> getAllOrdersWithFilters(Long userId, FulfillmentStatus status, PaymentStatus paymentStatus, String keyword, String sortBy, String direction, Pageable pageable) {
         log.info(
-                "Inside OrderServiceImpl.getAllOrdersWithFilters, getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, sortBy: {}, direction: {}",
-                userId, status, paymentStatus, sortBy, direction);
+                "Inside OrderServiceImpl.getAllOrdersWithFilters, getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, keyword: {}, sortBy: {}, direction: {}",
+                userId, status, paymentStatus, keyword, sortBy, direction);
 
         // Build Pageable with sorting using utility
         Pageable sortedPageable = PagingUtils.buildPageableWithSorting(pageable, sortBy, direction);
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return orderRepository.findAllWithFiltersAndKeyword(userId, status, paymentStatus, keyword.trim(), sortedPageable)
+                    .map(this::mapToResponse);
+        }
 
         return orderRepository.findAllWithFilters(userId, status, paymentStatus, sortedPageable)
                 .map(this::mapToResponse);
