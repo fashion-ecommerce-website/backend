@@ -2,8 +2,10 @@ package com.spring.fit.backend.security.service.impl;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -130,7 +132,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
                 // Generate tokens
                 UserDetails userDetails = createUserDetails(user);
-                String accessToken = jwtService.generateToken(userDetails);
+                Map<String, Object> extraClaims = new HashMap<>();
+                extraClaims.put("rank_id", user.getRankId());
+                String accessToken = jwtService.generateToken(extraClaims, userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
 
                 log.info("Inside AuthenticationServiceImpl.register success email={}", user.getEmail());
@@ -169,7 +173,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
                 // Generate tokens
                 UserDetails userDetails = createUserDetails(user);
-                String accessToken = jwtService.generateToken(userDetails);
+                Map<String, Object> extraClaims = new HashMap<>();
+                extraClaims.put("rank_id", user.getRankId());
+                String accessToken = jwtService.generateToken(extraClaims, userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
 
                 log.info("Inside AuthenticationServiceImpl.authenticate success email={}", user.getEmail());
@@ -203,7 +209,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
                 // Generate new tokens
                 UserDetails userDetails = createUserDetails(user);
-                String newAccessToken = jwtService.generateToken(userDetails);
+                Map<String, Object> extraClaims = new HashMap<>();
+                extraClaims.put("rank_id", user.getRankId());
+                String newAccessToken = jwtService.generateToken(extraClaims, userDetails);
                 String newRefreshToken = generateRefreshToken(userDetails);
 
                 // Revoke old refresh token
@@ -436,7 +444,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 
                 // Generate JWT tokens
                 UserDetails userDetails = createUserDetails(user);
-                String accessToken = jwtService.generateToken(userDetails);
+                Map<String, Object> extraClaims = new HashMap<>();
+                extraClaims.put("rank_id", user.getRankId());
+                String accessToken = jwtService.generateToken(extraClaims, userDetails);
                 String refreshToken = generateRefreshToken(userDetails);
                 
                 return AuthenticationResponse.builder()

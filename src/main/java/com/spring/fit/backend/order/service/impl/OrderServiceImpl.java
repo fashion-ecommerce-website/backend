@@ -5,6 +5,7 @@ import com.spring.fit.backend.common.enums.PaymentStatus;
 import com.spring.fit.backend.common.exception.ErrorException;
 import com.spring.fit.backend.order.service.InventoryService;
 import com.spring.fit.backend.order.service.ShipmentService;
+import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.voucher.domain.dto.VoucherValidateRequest;
 import com.spring.fit.backend.voucher.service.VoucherService;
 import org.springframework.http.HttpStatus;
@@ -56,6 +57,7 @@ public class OrderServiceImpl implements OrderService {
     private final ShipmentService shipmentService;
     private final VoucherService voucherService;
     private final InventoryService inventoryService;
+    private final PromotionService promotionService;
 
     @Override
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
@@ -135,6 +137,10 @@ public class OrderServiceImpl implements OrderService {
             // Get promotion ID if provided
             Long promotionId = detailRequest.getPromotionId();
 
+            if (!promotionService.isPromotionValid(promotionId)) {
+                throw new ErrorException(HttpStatus.BAD_REQUEST, "Promotion is expired, please checkout again!");
+            }
+
             var orderDetail = OrderDetail.builder()
                     .order(order)
                     .productDetail(productDetail)
@@ -165,8 +171,8 @@ public class OrderServiceImpl implements OrderService {
             try {
                 voucherService.applyVoucher(VoucherValidateRequest.builder()
                         .code(voucher.getCode())
-                        .subtotal(order.getSubtotalAmount().doubleValue())
-                        .build(), order.getUser().getId(), order.getId());
+                        .subtotal(savedOrder.getSubtotalAmount().doubleValue())
+                        .build(), savedOrder.getUser().getId(), savedOrder.getId());
             } catch (Exception e) {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, e.getMessage());
             }

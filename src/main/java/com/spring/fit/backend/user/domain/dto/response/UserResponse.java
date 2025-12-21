@@ -33,6 +33,9 @@ public class UserResponse {
     private boolean emailVerified;
     private boolean phoneVerified;
     private Set<String> roles;
+    private Short rankId;
+    private String rankName;
+
     
     public static UserResponse fromEntity(UserEntity user) {
         Set<String> roleNames = user.getUserRoles().stream()
@@ -55,6 +58,7 @@ public class UserResponse {
                 .emailVerified(user.isEmailVerified())
                 .phoneVerified(user.isPhoneVerified())
                 .roles(roleNames)
+                .rankId(user.getRankId())
                 .build();
     }
 }

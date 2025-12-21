@@ -12,6 +12,7 @@ import com.spring.fit.backend.common.model.response.PageResult;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardView;
 import com.spring.fit.backend.product.domain.dto.response.ProductCardWithPromotionResponse;
 import com.spring.fit.backend.product.service.ProductService;
+import com.spring.fit.backend.user.repository.UserRankRepository;
 import com.spring.fit.backend.user.service.RecentViewService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +42,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RecentViewService recentViewService;
     private final ProductService productService;
+    private final UserRankRepository userRankRepository;
 
     @Override
     public UserResponse getCurrentUser(String email) {
@@ -50,7 +52,15 @@ public class UserServiceImpl implements UserService {
         }
         UserEntity user = userRepository.findActiveUserByEmail(email.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
-        return UserResponse.fromEntity(user);
+        
+        UserResponse response = UserResponse.fromEntity(user);
+        
+        if (user.getRankId() != null) {
+            userRankRepository.findById(user.getRankId())
+                .ifPresent(rank -> response.setRankName(rank.getName()));
+        }
+        
+        return response;
     }
 
     @Override
