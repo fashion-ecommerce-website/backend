@@ -41,6 +41,8 @@ public interface PromotionService {
     long removeTargets(Long promotionId, PromotionTargetsRemoveRequest request);
 
     PromotionApplyResponse applyPromotionForSku(PromotionApplyRequest request);
+
+    boolean isPromotionValid(Long promotionId);
 }
 
 

@@ -341,6 +341,24 @@ public class PromotionServiceImpl implements PromotionService {
                 .build();
     }
 
+    @Override
+    public boolean isPromotionValid(Long promotionId) {
+        if (promotionId == null) {
+            return false;
+        }
+        
+        return promotionRepository.findById(promotionId)
+                .map(promotion -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    boolean isActive = promotion.isActive();
+                    boolean isStarted = !promotion.getStartAt().isAfter(now);
+                    boolean isNotExpired = !promotion.getEndAt().isBefore(now);
+                    
+                    return isActive && isStarted && isNotExpired;
+                })
+                .orElse(false);
+    }
+
     private void validatePromotionNotStarted(Promotion promotion) {
         LocalDateTime now = LocalDateTime.now();
         if (!promotion.getStartAt().isAfter(now)) {
