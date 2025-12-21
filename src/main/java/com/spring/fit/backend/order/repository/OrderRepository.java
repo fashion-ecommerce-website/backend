@@ -98,6 +98,20 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("paymentStatus") PaymentStatus paymentStatus,
                         Pageable pageable);
 
+        // Find all orders with optional filters and keyword search
+        @Query("SELECT o FROM Order o WHERE " +
+               "(:userId IS NULL OR o.user.id = :userId) AND " +
+               "(:status IS NULL OR o.status = :status) AND " +
+               "(:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) AND " +
+               "(CAST(o.id AS string) LIKE %:keyword% OR " +
+               "LOWER(o.user.username) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+               "LOWER(o.user.email) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+        Page<Order> findAllWithFiltersAndKeyword(@Param("userId") Long userId,
+                        @Param("status") FulfillmentStatus status,
+                        @Param("paymentStatus") PaymentStatus paymentStatus,
+                        @Param("keyword") String keyword,
+                        Pageable pageable);
+
         // Get orders by date range for dashboard
         @Query(value = "SELECT o.* FROM orders o WHERE o.created_at >= :startDate AND o.created_at < :endDate", nativeQuery = true)
         List<Order> findOrdersByDateRange(@Param("startDate") LocalDateTime startDate,

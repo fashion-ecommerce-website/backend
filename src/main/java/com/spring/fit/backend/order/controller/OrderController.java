@@ -94,15 +94,16 @@ public class OrderController {
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) FulfillmentStatus status,
             @RequestParam(required = false) PaymentStatus paymentStatus,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false, defaultValue = "asc") String direction,
             @PageableDefault(size = 20) Pageable pageable) {
 
         log.info(
-                "Inside OrderController.getAllOrders getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, sortBy: {}, direction: {}",
-                userId, status, paymentStatus, sortBy, direction);
+                "Inside OrderController.getAllOrders getting all orders with filters - userId: {}, status: {}, paymentStatus: {}, keyword: {}, sortBy: {}, direction: {}",
+                userId, status, paymentStatus, keyword, sortBy, direction);
 
-        Page<OrderResponse> response = orderService.getAllOrdersWithFilters(userId, status, paymentStatus, sortBy, direction, pageable);
+        Page<OrderResponse> response = orderService.getAllOrdersWithFilters(userId, status, paymentStatus, keyword, sortBy, direction, pageable);
 
         return ResponseEntity.ok(response);
     }
