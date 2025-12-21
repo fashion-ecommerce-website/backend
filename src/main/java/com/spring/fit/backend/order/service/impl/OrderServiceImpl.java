@@ -137,7 +137,7 @@ public class OrderServiceImpl implements OrderService {
             // Get promotion ID if provided
             Long promotionId = detailRequest.getPromotionId();
 
-            if (!promotionService.isPromotionValid(promotionId)) {
+            if (promotionId != null && !promotionService.isPromotionValid(promotionId)) {
                 throw new ErrorException(HttpStatus.BAD_REQUEST, "Promotion is expired, please checkout again!");
             }
 
