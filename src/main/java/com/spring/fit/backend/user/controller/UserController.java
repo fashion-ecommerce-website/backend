@@ -48,8 +48,14 @@ public class UserController {
             @RequestParam(defaultValue = "10")
             @Min(value = 1, message = "PageSize must be >= 1")
             @Max(value = 100, message = "PageSize cannot exceed 100")
-            int pageSize) {
-        PageResult<UserResponse> users = userService.getAllUsers(page, pageSize);
+            int pageSize,
+
+            @RequestParam(required = false)
+            String keyword,
+
+            @RequestParam(required = false)
+            Boolean active) {
+        PageResult<UserResponse> users = userService.getAllUsers(page, pageSize, keyword, active);
         return ResponseEntity.ok(users);
     }
 

@@ -2,6 +2,8 @@ package com.spring.fit.backend.security.repository;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -29,4 +31,15 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findByPhone(String phone);
 
     Optional<UserEntity> findByResetPasswordToken(String resetPasswordToken);
+
+    @Query(value = """
+           SELECT * FROM users u WHERE 
+           (:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND 
+           (:isActive IS NULL OR u.is_active = :isActive) 
+           ORDER BY u.created_at DESC
+           """, 
+           nativeQuery = true)
+    Page<UserEntity> findUsersWithFilters(@Param("keyword") String keyword, 
+                                         @Param("isActive") Boolean isActive,
+                                         Pageable pageable);
 }

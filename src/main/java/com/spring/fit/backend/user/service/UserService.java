@@ -17,6 +17,8 @@ public interface UserService {
     
     PageResult<UserResponse> getAllUsers(int page, int pageSize);
     
+    PageResult<UserResponse> getAllUsers(int page, int pageSize, String keyword, Boolean active);
+    
     UserResponse updateUserStatus(UpdateUserStatusRequest request);
     
     // Recently viewed products methods

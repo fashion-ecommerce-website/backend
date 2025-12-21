@@ -104,16 +104,30 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResult<UserResponse> getAllUsers(int page, int pageSize) {
-        log.info("Inside UserServiceImpl.getAllUsers page={}, pageSize={}", page, pageSize);
+        return getAllUsers(page, pageSize, null, null);
+    }
+
+    @Override
+    public PageResult<UserResponse> getAllUsers(int page, int pageSize, String keyword, Boolean isActive) {
+        log.info("Inside UserServiceImpl.getAllUsers page={}, pageSize={}, keyword={}, isActive={}", 
+                page, pageSize, keyword, isActive);
         
-        Pageable pageable = PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<UserEntity> userPage = userRepository.findAll(pageable);
+        // For native query, we don't need to specify Sort in Pageable since it's handled in the query
+        Pageable pageable = PageRequest.of(page, pageSize);
+        Page<UserEntity> userPage;
+        
+        // Use search method if keyword or isActive filter is provided
+        if (keyword != null || isActive != null) {
+            userPage = userRepository.findUsersWithFilters(keyword, isActive, pageable);
+        } else {
+            userPage = userRepository.findAll(PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        }
         
         Page<UserResponse> responsePage = userPage.map(UserResponse::fromEntity);
         
         PageResult<UserResponse> result = PageResult.from(responsePage);
-        log.info("Inside UserServiceImpl.getAllUsers success totalItems={}, totalPages={}", 
-                result.totalItems(), result.totalPages());
+        log.info("Inside UserServiceImpl.getAllUsers success totalItems={}, totalPages={}, keyword={}, isActive={}", 
+                result.totalItems(), result.totalPages(), keyword, isActive);
         return result;
     }
 
