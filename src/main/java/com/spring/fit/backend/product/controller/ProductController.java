@@ -47,7 +47,7 @@ public class ProductController {
             List<@NotBlank @Size(max = 10) String> sizes,
 
             @RequestParam(required = false, name="price")
-            @Pattern(regexp = "^(<1m|1-2m|2-3m|>4m)$", message = "Invalid price bucket format")
+            @Pattern(regexp = "^(<1m|1-2m|2-3m|>3m)$", message = "Invalid price bucket format")
             String priceBucket,
 
             @RequestParam(required = false, name="sort")
@@ -117,7 +117,7 @@ public class ProductController {
             List<@NotBlank @Size(max = 10) String> sizes,
 
             @RequestParam(required = false, name="price")
-            @Pattern(regexp = "^(<1m|1-2m|2-3m|>4m)$", message = "Invalid price bucket format")
+            @Pattern(regexp = "^(<1m|1-2m|2-3m|>3m)$", message = "Invalid price bucket format")
             String priceBucket,
 
             @RequestParam(required = false, name="sort")

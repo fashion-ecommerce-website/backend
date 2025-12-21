@@ -55,7 +55,7 @@ public class ProductServiceImpl implements ProductService {
             "<1m", new BigDecimal[]{null, BigDecimal.valueOf(1_000_000)},
             "1-2m", new BigDecimal[]{BigDecimal.valueOf(1_000_000), BigDecimal.valueOf(2_000_000)},
             "2-3m", new BigDecimal[]{BigDecimal.valueOf(2_000_000), BigDecimal.valueOf(3_000_000)},
-            ">4m", new BigDecimal[]{BigDecimal.valueOf(4_000_000), null}
+            ">3m", new BigDecimal[]{BigDecimal.valueOf(3_000_000), null}
     );
 
     private static final String DEFAULT_SORT_FIELD = "productTitle";
