@@ -15,14 +15,16 @@ public class ProductListResponse {
     private Long id;
     private String title;
     private String description;
-    private String thumbnail; // ảnh đầu tiên của 1 màu bất kì
-    private Long currentDetailId; // detail ID của chính thumbnail được lấy ra
-    private Long categoryId; // tên category chính
-    private List<ColorResponse> variantColors; // danh sách màu đang active
-    private List<SizeResponse> variantSizes; // danh sách size đang active
+    private String thumbnail;
+    private Long currentDetailId;
+    private Long categoryId;
+    private List<ColorResponse> variantColors;
+    private List<SizeResponse> variantSizes;
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer totalQuantity;
+    private Boolean hasOutOfStock;
 }
 
 
