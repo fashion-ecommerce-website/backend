@@ -11,6 +11,7 @@ import com.spring.fit.backend.product.domain.entity.ProductDetail;
 import com.spring.fit.backend.product.repository.ProductDetailRepository;
 import com.spring.fit.backend.review.domain.dto.request.CreateReviewRequest;
 import com.spring.fit.backend.review.domain.dto.request.UpdateReviewRequest;
+import com.spring.fit.backend.review.domain.dto.response.ReviewModerationResponse;
 import com.spring.fit.backend.review.domain.dto.response.ReviewResponse;
 import com.spring.fit.backend.review.domain.entity.Review;
 import com.spring.fit.backend.review.repository.ReviewRepository;
@@ -19,6 +20,7 @@ import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.moderation.ModerationResult;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final UserRepository userRepository;
     private final ProductDetailRepository productDetailRepository;
     private final OrderRepository orderRepository;
+    private final AIModerationServiceImpl aiModerationService;
 
     @Override
     public ReviewResponse createReview(String userEmail, CreateReviewRequest request) {
@@ -43,7 +46,6 @@ public class ReviewServiceImpl implements ReviewService {
         UserEntity user = userRepository.findActiveUserByEmail(userEmail.trim())
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "User not found"));
 
-        // 1️⃣ Lấy orderDetailId từ request
         Long orderDetailId = request.getOrderDetailId();
 
         Order order = orderRepository.findByIdWithDetails(request.getOrderId())
@@ -55,26 +57,29 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Order detail not found"));
 
 
-        // 3️⃣ Check ownership
         if (!order.getUser().getId().equals(user.getId())) {
             throw new ErrorException(HttpStatus.FORBIDDEN, "Not your order");
         }
-        // 4️⃣ Check order completed
         if (order.getStatus() != FulfillmentStatus.FULFILLED) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Order not completed");
         }
 
 
-        // 6️⃣ Check đã review chưa
         if (orderDetail.getReview() != null) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Already reviewed");
         }
 
-        // 7️⃣ Tạo review
+        ReviewModerationResponse moderation = aiModerationService.verifyContent(request.getContent());
+
+        if (!moderation.isClean()) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST,
+                    "This content violates community guidelines. Please use polite language.");
+        }
+
         Review review = Review.builder()
                 .orderDetail(orderDetail)
                 .rating(request.getRating())
-                .content(request.getContent())
+                .content(request.getContent()) // Dùng kết quả từ AI thay vì request.getContent()
                 .build();
 
         Review saved = reviewRepository.save(review);
@@ -129,6 +134,11 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (!ownerId.equals(user.getId())) {
             throw new ErrorException(HttpStatus.FORBIDDEN, "You are not allowed to update this review");
+        }
+
+        ReviewModerationResponse moderation = aiModerationService.verifyContent(request.getContent());
+        if (!moderation.isClean()) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Nội dung cập nhật vi phạm quy chuẩn");
         }
 
         review.setRating(request.getRating());
