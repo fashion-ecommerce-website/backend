@@ -28,7 +28,7 @@ public class AdviceController {
 
     @ExceptionHandler(ErrorException.class)
     public ResponseEntity<ErrorResponse> handleErrorException(ErrorException ex) {
-        log.error("Inside handleErrorException(): {}", ex.getErrorResponse().getMessage(), ex);
+        log.error("Inside handleErrorException(): {}", ex.getErrorResponse().getMessage());
         return ResponseEntity.status(ex.getStatus()).body(ex.getErrorResponse());
     }
 
