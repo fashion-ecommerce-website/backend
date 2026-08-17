@@ -41,6 +41,8 @@ jobs:
           docker push thinhnd24/fit-backend:latest
 
       - name: Trigger Railway Redeploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           npm install -g @railway/cli
-          railway redeploy -y --service fit-backend --token ${{ secrets.RAILWAY_TOKEN }}
+          railway redeploy -y --service fit-backend
