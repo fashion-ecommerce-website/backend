@@ -1120,13 +1120,6 @@ ALTER TABLE ONLY public.colors
     ADD CONSTRAINT colors_pkey PRIMARY KEY (id);
 
 
---
--- Name: databasechangeloglock databasechangeloglock_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.databasechangeloglock
-    ADD CONSTRAINT databasechangeloglock_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: roles idx_role_name; Type: CONSTRAINT; Schema: public; Owner: postgres
