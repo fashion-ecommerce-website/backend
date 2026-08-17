@@ -40,6 +40,7 @@ jobs:
           docker tag api-app:latest thinhnd24/fit-backend:latest
           docker push thinhnd24/fit-backend:latest
 
-      - name: Trigger deploy on Render
+      - name: Trigger Railway Redeploy
         run: |
-          curl -X POST https://api.render.com/deploy/srv-d045p0adbo4c73e9iv9g?key=xtiRl3rX5lo
+          npm install -g @railway/cli
+          railway redeploy -y --service fit-backend --token ${{ secrets.RAILWAY_TOKEN }}
