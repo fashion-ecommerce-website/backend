@@ -60,7 +60,7 @@ public interface ProductMainRepository extends org.springframework.data.jpa.repo
       LEFT JOIN product_details pd ON p.id = pd.product_id
       LEFT JOIN colors col ON col.id = pd.color_id
       LEFT JOIN sizes size ON size.id = pd.size_id
-      WHERE (:categorySlug IS NULL OR c.slug = :categorySlug)
+      WHERE (:categorySlug IS NULL OR c.slug = :categorySlug OR c.parent_id IN (SELECT sub_c.id FROM categories sub_c WHERE sub_c.slug = :categorySlug))
         AND (:title IS NULL OR LOWER(p.title) LIKE LOWER(:title))
         AND (:isActive IS NULL OR p.is_active = :isActive)
     ) x ON x.id = p.id

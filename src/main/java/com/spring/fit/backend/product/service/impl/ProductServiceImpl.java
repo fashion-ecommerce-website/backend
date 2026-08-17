@@ -17,10 +17,13 @@ import com.spring.fit.backend.promotion.service.PromotionService;
 import com.spring.fit.backend.user.service.RecentViewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -465,7 +468,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductDetailResponse getProductDetailById(Long detailId) {
-        log.info("Inside ProductServiceImpl.getProductDetailById detailId={}", detailId);
+        log.debug("Inside ProductServiceImpl.getProductDetailById detailId={}", detailId);
         
         if (detailId == null) {
             throw new ErrorException(HttpStatus.BAD_REQUEST, "Detail ID cannot be null");
@@ -476,28 +479,23 @@ public class ProductServiceImpl implements ProductService {
             ProductDetail productDetail = productDetailRepository.findById(detailId)
                     .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
             
-            log.debug("Inside ProductServiceImpl.getProductDetailById found detailId={}", productDetail.getId());
-            
             // 2. Lấy Product từ ProductDetail
             Product product = productDetail.getProduct();
             if (product == null) {
                 throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Product not found for detail ID: " + detailId);
             }
             
-            log.info("Inside ProductServiceImpl.getProductDetailById productId={}, title={}", product.getId(), product.getTitle());
             // 3. Lấy activeColor & activeSize từ ProductDetail
             String activeColor = productDetail.getColor().getName();
             String activeSize = productDetail.getSize().getLabel();
-            log.info("Inside ProductServiceImpl.getProductDetailById activeColor={}, activeSize={}", activeColor, activeSize);
+            
             // 4. Lấy tất cả colors của product này (native query để tránh lazy load)
             List<String> colorList = productRepository.findAllColorsByDetailId(detailId);
             Set<String> allColors = new LinkedHashSet<>(colorList);
             
-            log.info("Inside ProductServiceImpl.getProductDetailById colors={}", allColors);
             // 5. Lấy images của ProductDetail hiện tại (native query)
             List<String> images = productRepository.findImageUrlsByDetailId(detailId);
             
-            log.info("Inside ProductServiceImpl.getProductDetailById imagesSize={}", images != null ? images.size() : 0);
             // 6. Lấy mapSizeToQuantity từ ProductDetail của cùng product và color (native query)
             Map<String, Integer> mapSizeToQuantity = productRepository.findSizeQuantityByDetailId(detailId)
                     .stream()
@@ -508,7 +506,6 @@ public class ProductServiceImpl implements ProductService {
                             LinkedHashMap::new
                     ));
             
-            log.info("Inside ProductServiceImpl.getProductDetailById mapSizeToQuantityKeys={}", mapSizeToQuantity.keySet());
             // 7. Parse description từ String thành List<String>
             List<String> descriptionList = new ArrayList<>();
             if (StringUtils.hasText(product.getDescription())) {
@@ -518,9 +515,9 @@ public class ProductServiceImpl implements ProductService {
                         .filter(StringUtils::hasText)
                         .collect(Collectors.toList());
             }
-            log.info("Inside ProductServiceImpl.getProductDetailById descriptionCount={}", descriptionList.size());
+
             // 8. Build response
-            ProductDetailResponse response = ProductDetailResponse.builder()
+            return ProductDetailResponse.builder()
                     .detailId(detailId)
                     .title(product.getTitle())
                     .price(productDetail.getPrice())
@@ -531,9 +528,6 @@ public class ProductServiceImpl implements ProductService {
                     .mapSizeToQuantity(mapSizeToQuantity)
                     .description(descriptionList)
                     .build();
-            
-            log.info("Inside ProductServiceImpl.getProductDetailById success detailId={}", detailId);
-            return response;
 
         } catch (ErrorException e) {
             throw e;
@@ -546,49 +540,79 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductDetailWithPromotionResponse getProductDetailByIdWithPromotion(Long detailId) {
-        ProductDetailResponse base = getProductDetailById(detailId);
+        // Single DB lookup — reuse findById result to avoid double query
+        if (detailId == null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Detail ID cannot be null");
+        }
 
         ProductDetail productDetail = productDetailRepository.findById(detailId)
                 .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, "Product detail not found with ID: " + detailId));
-        Long productId = productDetail.getProduct().getId();
-        
-        String categorySlug = null;
+
         Product product = productDetail.getProduct();
+        if (product == null) {
+            throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Product not found for detail ID: " + detailId);
+        }
+
+        Long productId = product.getId();
+
+        // Resolve category slug
+        String categorySlug = null;
         if (product.getCategories() != null && !product.getCategories().isEmpty()) {
             categorySlug = product.getCategories().iterator().next().getSlug();
         }
 
-        
-        var applyRes = PromotionApplyResponse.builder().build();
+        // Build the common detail fields inline (same as getProductDetailById but reusing productDetail)
+        String activeColor = productDetail.getColor().getName();
+        String activeSize = productDetail.getSize().getLabel();
+        List<String> colorList = productRepository.findAllColorsByDetailId(detailId);
+        List<String> images = productRepository.findImageUrlsByDetailId(detailId);
+        Map<String, Integer> mapSizeToQuantity = productRepository.findSizeQuantityByDetailId(detailId)
+                .stream()
+                .collect(Collectors.toMap(
+                        v -> v.getSizeCode(),
+                        v -> v.getQuantity() != null ? v.getQuantity() : 0,
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ));
+        List<String> descriptionList = new ArrayList<>();
+        if (StringUtils.hasText(product.getDescription())) {
+            descriptionList = Arrays.stream(product.getDescription().split("[;\n]"))
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.toList());
+        }
+
+        // Apply promotion
+        PromotionApplyResponse applyRes;
         try {
             var applyReq = PromotionApplyRequest.builder()
-                    .skuId(base.getDetailId())
-                    .basePrice(base.getPrice())
+                    .skuId(detailId)
+                    .basePrice(productDetail.getPrice())
                     .build();
             applyRes = promotionService.applyPromotionForSku(applyReq);
         } catch (Exception ex) {
             applyRes = PromotionApplyResponse.builder()
-                    .basePrice(base.getPrice())
-                    .finalPrice(base.getPrice())
+                    .basePrice(productDetail.getPrice())
+                    .finalPrice(productDetail.getPrice())
                     .percentOff(0)
                     .build();
         }
 
         return ProductDetailWithPromotionResponse.builder()
-                .detailId(base.getDetailId())
+                .detailId(detailId)
                 .productId(productId)
-                .title(base.getTitle())
-                .price(base.getPrice())
+                .title(product.getTitle())
+                .price(productDetail.getPrice())
                 .finalPrice(applyRes.getFinalPrice())
                 .percentOff(applyRes.getPercentOff())
                 .promotionId(applyRes.getPromotionId())
                 .promotionName(applyRes.getPromotionName())
-                .activeColor(base.getActiveColor())
-                .activeSize(base.getActiveSize())
-                .images(base.getImages())
-                .colors(base.getColors())
-                .mapSizeToQuantity(base.getMapSizeToQuantity())
-                .description(base.getDescription())
+                .activeColor(activeColor)
+                .activeSize(activeSize)
+                .images(images)
+                .colors(new ArrayList<>(new LinkedHashSet<>(colorList)))
+                .mapSizeToQuantity(mapSizeToQuantity)
+                .description(descriptionList)
                 .categorySlug(categorySlug)
                 .build();
     }
@@ -1592,8 +1616,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "newArrivals", key = "#categorySlug + '_' + #limit")
     public List<NewArrivalsResponse> getNewArrivalsByRootCategories(String categorySlug, int limit) {
-        log.info("Inside ProductServiceImpl.getNewArrivalsByRootCategories categorySlug={}, limit={}", categorySlug, limit);
+        log.info("Inside ProductServiceImpl.getNewArrivalsByRootCategories categorySlug={}, limit={} [CACHE MISS — querying DB]", categorySlug, limit);
         
         try {
             List<Category> rootCategories;
@@ -1689,8 +1714,9 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Cacheable(value = "bestSellers")
     public List<ProductCardWithPromotionResponse> getTopSellingProducts() {
-        log.info("Inside ProductServiceImpl.getTopSellingProducts");
+        log.info("Inside ProductServiceImpl.getTopSellingProducts [CACHE MISS — querying DB]");
         try {
             List<ProductCardView> products = productRepository.findTopSellingProducts();
             
@@ -1736,4 +1762,23 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    // ========== Cache Eviction Schedules ==========
+
+    /**
+     * Evict bestSellers cache every 30 minutes so rankings stay fresh.
+     */
+    @CacheEvict(value = "bestSellers", allEntries = true)
+    @Scheduled(fixedRate = 1_800_000) // 30 minutes
+    public void evictBestSellersCache() {
+        log.debug("Evicting bestSellers cache");
+    }
+
+    /**
+     * Evict newArrivals cache every 10 minutes so new products surface quickly.
+     */
+    @CacheEvict(value = "newArrivals", allEntries = true)
+    @Scheduled(fixedRate = 600_000) // 10 minutes
+    public void evictNewArrivalsCache() {
+        log.debug("Evicting newArrivals cache");
+    }
 }

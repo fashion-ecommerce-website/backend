@@ -32,7 +32,7 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
             AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
             AND (:colorsEmpty = TRUE OR c.name IN (:colors))
             AND (:sizesEmpty  = TRUE OR s.code IN (:sizes))
-            AND (:category IS NULL OR cat.slug = :category)
+            AND (:category IS NULL OR cat.slug = :category OR cat.parent_id IN (SELECT sub_c.id FROM categories sub_c WHERE sub_c.slug = :category))
         )
         , one_per_color AS (
           SELECT DISTINCT ON (product_id, color_id)
@@ -151,7 +151,7 @@ public interface ProductRepository extends JpaRepository<ProductDetail, Long> {
         AND (:title IS NULL OR p.title ILIKE CONCAT('%%', :title, '%%'))
         AND (:colorsEmpty = TRUE OR c.name IN (:colors))
         AND (:sizesEmpty  = TRUE OR s.code IN (:sizes))
-        AND (:category IS NULL OR cat.slug = :category)
+        AND (:category IS NULL OR cat.slug = :category OR cat.parent_id IN (SELECT sub_c.id FROM categories sub_c WHERE sub_c.slug = :category))
     )
     , one_per_color AS (
       SELECT DISTINCT ON (product_id, color_id)

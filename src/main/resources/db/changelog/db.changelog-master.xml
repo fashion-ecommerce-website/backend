@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Seed Luxury Catalog Data (Dior, Chanel, YSL, LV, Gucci, Prada, Hermès) -->
+    <include file="db/changelog/changes/v1.0.0_seed_luxury_data.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/v1.0.1_expanded_luxury_catalog.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/v1.0.2_seed_luxury_subcategories.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/v1.0.3_expanded_subcategory_20_items.sql" relativeToChangelogFile="false"/>
+    <!-- v1.0.4: 520 real luxury products with unique Unsplash photo per product (zero URL duplication) -->
+    <include file="db/changelog/changes/v1.0.4_real_luxury_unique_photos.sql" relativeToChangelogFile="false"/>
+    <!-- v1.0.5: Performance indexes for product filtering, JOIN, ORDER BY columns -->
+    <include file="db/changelog/changes/v1.0.5_performance_indexes.sql" relativeToChangelogFile="false"/>
+
+</databaseChangeLog>
