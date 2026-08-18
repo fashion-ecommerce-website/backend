@@ -128,7 +128,8 @@ public class AuthenticationController {
             AuthenticationResponse response = authenticationService.googleLogin(request);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Google login failed");
+            log.error("Google login failed error: ", e);
+            throw new ErrorException(HttpStatus.INTERNAL_SERVER_ERROR, "Google login failed: " + e.getMessage());
         }
     }
 }
