@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,32 +15,33 @@ import com.spring.fit.backend.security.domain.entity.UserEntity;
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
-    Optional<UserEntity> findByEmail(String email);
+       @EntityGraph(attributePaths = { "userRoles", "userRoles.role" })
+       Optional<UserEntity> findByEmail(String email);
 
-    Optional<UserEntity> findByUsername(String username);
+       Optional<UserEntity> findByUsername(String username);
 
-    boolean existsByEmail(String email);
+       boolean existsByEmail(String email);
 
-    boolean existsByUsername(String username);
+       boolean existsByUsername(String username);
 
-    @Query("SELECT u FROM UserEntity u WHERE u.email = :email AND u.isActive = true")
-    Optional<UserEntity> findActiveUserByEmail(@Param("email") String email);
+       @EntityGraph(attributePaths = { "userRoles", "userRoles.role" })
+       @Query("SELECT u FROM UserEntity u WHERE u.email = :email AND u.isActive = true")
+       Optional<UserEntity> findActiveUserByEmail(@Param("email") String email);
 
-    @Query("SELECT u FROM UserEntity u WHERE u.username = :username AND u.isActive = true")
-    Optional<UserEntity> findActiveUserByUsername(@Param("username") String username);
+       @Query("SELECT u FROM UserEntity u WHERE u.username = :username AND u.isActive = true")
+       Optional<UserEntity> findActiveUserByUsername(@Param("username") String username);
 
-    Optional<UserEntity> findByPhone(String phone);
+       Optional<UserEntity> findByPhone(String phone);
 
-    Optional<UserEntity> findByResetPasswordToken(String resetPasswordToken);
+       Optional<UserEntity> findByResetPasswordToken(String resetPasswordToken);
 
-    @Query(value = """
-           SELECT * FROM users u WHERE 
-           (:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND 
-           (:isActive IS NULL OR u.is_active = :isActive) 
-           ORDER BY u.created_at DESC
-           """, 
-           nativeQuery = true)
-    Page<UserEntity> findUsersWithFilters(@Param("keyword") String keyword, 
-                                         @Param("isActive") Boolean isActive,
-                                         Pageable pageable);
+       @Query(value = """
+                     SELECT * FROM users u WHERE
+                     (:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND
+                     (:isActive IS NULL OR u.is_active = :isActive)
+                     ORDER BY u.created_at DESC
+                     """, nativeQuery = true)
+       Page<UserEntity> findUsersWithFilters(@Param("keyword") String keyword,
+                     @Param("isActive") Boolean isActive,
+                     Pageable pageable);
 }

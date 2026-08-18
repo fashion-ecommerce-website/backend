@@ -17,6 +17,8 @@ import com.spring.fit.backend.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.spring.fit.backend.security.domain.enums.RoleType;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -82,13 +84,13 @@ public class CustomUserDetailsService implements UserDetailsService {
                         // Add default USER role if no roles found
                         if (authorities.isEmpty()) {
                                 log.warn("No valid roles found for user {}, adding default USER role", user.getEmail());
-                                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                                authorities.add(new SimpleGrantedAuthority(RoleType.USER.getAuthority()));
                         }
                         
                 } catch (Exception e) {
                         log.error("Error creating authorities for user {}: {}", user.getEmail(), e.getMessage(), e);
                         // Add default USER role as fallback
-                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                        authorities.add(new SimpleGrantedAuthority(RoleType.USER.getAuthority()));
                 }
                 
                 return authorities;

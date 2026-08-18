@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,9 +18,12 @@ import com.spring.fit.backend.security.domain.dto.RefreshTokenRequest;
 import com.spring.fit.backend.security.domain.dto.ChangePasswordRequest;
 import com.spring.fit.backend.security.domain.dto.ResetPasswordRequest;
 import com.spring.fit.backend.security.domain.dto.GoogleLoginRequest;
+import com.spring.fit.backend.security.service.AuthCookieService;
 import com.spring.fit.backend.security.service.AuthenticationService;
 import com.spring.fit.backend.security.service.OtpService;
+import com.spring.fit.backend.security.service.RateLimiterService;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +36,8 @@ public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
     private final OtpService otpService;
+    private final AuthCookieService authCookieService;
+    private final RateLimiterService rateLimiterService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticationResponse> register(
@@ -44,26 +50,50 @@ public class AuthenticationController {
 
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> authenticate(
-            @Valid @RequestBody AuthenticationRequest request) {
+            @Valid @RequestBody AuthenticationRequest request,
+            HttpServletResponse servletResponse) {
 
         AuthenticationResponse response = authenticationService.authenticate(request);
+        authCookieService.setRefreshTokenCookie(servletResponse, response.getRefreshToken());
 
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<AuthenticationResponse> refreshToken(
-            @Valid @RequestBody RefreshTokenRequest request) {
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) RefreshTokenRequest requestBody,
+            HttpServletResponse servletResponse) {
 
-        AuthenticationResponse response = authenticationService.refreshToken(request);
+        String tokenToUse = authCookieService.resolveRefreshToken(
+                cookieRefreshToken,
+                requestBody != null ? requestBody.getRefreshToken() : null);
+
+        if (tokenToUse == null) {
+            throw new ErrorException(HttpStatus.BAD_REQUEST, "Refresh token is required in cookie or body");
+        }
+
+        AuthenticationResponse response = authenticationService.refreshToken(new RefreshTokenRequest(tokenToUse));
+        authCookieService.setRefreshTokenCookie(servletResponse, response.getRefreshToken());
 
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) RefreshTokenRequest requestBody,
+            HttpServletResponse servletResponse) {
 
-        authenticationService.logout(request.getRefreshToken());
+        String tokenToUse = authCookieService.resolveRefreshToken(
+                cookieRefreshToken,
+                requestBody != null ? requestBody.getRefreshToken() : null);
+
+        if (tokenToUse != null) {
+            authenticationService.logout(tokenToUse);
+        }
+
+        authCookieService.clearRefreshTokenCookie(servletResponse);
 
         return ResponseEntity.ok().build();
     }
@@ -75,6 +105,12 @@ public class AuthenticationController {
             return ResponseEntity.badRequest().body("Email is required");
         }
         
+        if (!rateLimiterService.allowOtpRequest(email)) {
+            long waitSeconds = rateLimiterService.getOtpCooldownRemainingSeconds(email);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body("Please wait " + waitSeconds + " seconds before requesting another OTP.");
+        }
+
         otpService.sendOtp(email);
         return ResponseEntity.ok("OTP sent successfully to email");
     }
@@ -110,7 +146,19 @@ public class AuthenticationController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Void> forgotPassword(@RequestBody String email) {
+    public ResponseEntity<Void> forgotPassword(@RequestBody Object body) {
+        String email = null;
+        if (body instanceof Map<?, ?> map) {
+            Object val = map.get("email");
+            if (val != null) email = val.toString();
+        } else if (body instanceof String str) {
+            email = str;
+        }
+
+        if (email != null) {
+            email = email.replace("\"", "").trim();
+        }
+
         authenticationService.forgotPassword(email);
         return ResponseEntity.ok().build();
     }
@@ -122,10 +170,13 @@ public class AuthenticationController {
     }
 
     @PostMapping("/google-login")
-    public ResponseEntity<AuthenticationResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+    public ResponseEntity<AuthenticationResponse> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest request,
+            HttpServletResponse servletResponse) {
         
         try {
             AuthenticationResponse response = authenticationService.googleLogin(request);
+            authCookieService.setRefreshTokenCookie(servletResponse, response.getRefreshToken());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Google login failed error: ", e);

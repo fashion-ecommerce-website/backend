@@ -3,11 +3,11 @@ package com.spring.fit.backend.security.service.impl;
 import com.spring.fit.backend.security.domain.entity.PasswordResetToken;
 import com.spring.fit.backend.security.domain.entity.UserEntity;
 import com.spring.fit.backend.security.repository.PasswordResetTokenRepository;
-import com.spring.fit.backend.security.repository.UserRepository;
 import com.spring.fit.backend.security.service.PasswordResetTokenService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZonedDateTime;
 import java.util.Optional;
@@ -19,11 +19,16 @@ public class PasswordResetTokenServiceImpl implements PasswordResetTokenService 
 
     private final PasswordResetTokenRepository tokenRepository;
 
+    @Transactional
     public PasswordResetToken createToken(UserEntity user) {
+        // Delete any existing token for the user first (flush immediately to avoid duplicate key)
+        tokenRepository.deleteByUser(user);
+        tokenRepository.flush();
+
         PasswordResetToken token = new PasswordResetToken();
         token.setToken(UUID.randomUUID().toString());
         token.setUser(user);
-        token.setExpiryDate(ZonedDateTime.now().plusSeconds(60));
+        token.setExpiryDate(ZonedDateTime.now().plusMinutes(15));
         return tokenRepository.save(token);
     }
 
@@ -39,9 +44,9 @@ public class PasswordResetTokenServiceImpl implements PasswordResetTokenService 
     }
 
     @Override
+    @Transactional
     public void deleteToken(String token) {
-        tokenRepository
-                .delete(tokenRepository.findByToken(token).orElseThrow(() -> new RuntimeException("Token not found")));
+        tokenRepository.deleteByToken(token);
     }
 
     @Override

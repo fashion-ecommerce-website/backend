@@ -1,5 +1,6 @@
 package com.spring.fit.backend.security.config;
 
+import com.spring.fit.backend.security.domain.enums.RoleType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.Arrays;
 
+import org.springframework.http.HttpMethod;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -41,11 +44,39 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
+                        // Public Auth & Webhooks
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/payments/webhook").permitAll()
-                        .requestMatchers("/api/webhooks/**").permitAll()  // Webhook endpoints (GHTK, GHN, etc.)
-                        .requestMatchers("/api/users/**").authenticated()  // Require authentication for user endpoints
-                        .requestMatchers("/api/**").permitAll()
+                        .requestMatchers("/api/webhooks/**").permitAll()
+
+                        // Public Catalog & Metadata (GET only)
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/colors/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/sizes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vouchers/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/promotions/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/common/**").permitAll()
+                        .requestMatchers("/api/chatbot/**").permitAll()
+
+                        // Admin-only endpoints
+                        .requestMatchers("/api/admin/**").hasRole(RoleType.ADMIN.name())
+                        .requestMatchers("/api/reports/**").hasRole(RoleType.ADMIN.name())
+                        .requestMatchers("/api/chatbot/admin/**").hasRole(RoleType.ADMIN.name())
+                        .requestMatchers("/api/products/import").hasRole(RoleType.ADMIN.name())
+
+                        // Require authentication for private user / transactional APIs
+                        .requestMatchers("/api/users/**").authenticated()
+                        .requestMatchers("/api/cart/**").authenticated()
+                        .requestMatchers("/api/orders/**").authenticated()
+                        .requestMatchers("/api/wishlists/**").authenticated()
+                        .requestMatchers("/api/addresses/**").authenticated()
+                        .requestMatchers("/api/refunds/**").authenticated()
+                        .requestMatchers("/api/recommendations/**").authenticated()
+
+                        // All other API routes require authentication
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
