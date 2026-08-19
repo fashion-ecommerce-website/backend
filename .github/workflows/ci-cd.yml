@@ -40,10 +40,3 @@ jobs:
           docker tag api-app:latest thinhnd24/fit-backend:latest
           docker push thinhnd24/fit-backend:latest
 
-      - name: Trigger Railway Redeploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          npm install -g @railway/cli
-          railway redeploy -y --service fit-backend
