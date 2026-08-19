@@ -21,9 +21,6 @@ import java.util.Set;
         name = "promotions",
         indexes = {
                 @Index(name = "idx_promotion_active_period", columnList = "is_active, start_at, end_at")
-        },
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_promotion_name_period", columnNames = {"name", "start_at", "end_at"})
         }
 )
 @Getter

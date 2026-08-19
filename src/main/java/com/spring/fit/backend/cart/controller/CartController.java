@@ -1,13 +1,12 @@
 package com.spring.fit.backend.cart.controller;
 
-import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
-import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
-import com.spring.fit.backend.cart.domain.dto.CartDetailWithPromotionResponse;
-import com.spring.fit.backend.cart.domain.dto.RemoveFromCartRequest;
-import com.spring.fit.backend.cart.domain.dto.UpdateCartItemRequest;
+import com.spring.fit.backend.cart.domain.dto.request.AddToCartRequest;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailWithPromotionResponse;
+import com.spring.fit.backend.cart.domain.dto.request.RemoveFromCartRequest;
+import com.spring.fit.backend.cart.domain.dto.request.UpdateCartRequest;
 import com.spring.fit.backend.cart.service.CartService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,25 +39,18 @@ public class CartController {
         return ResponseEntity.ok(cartItems);
     }
 
-    @PutMapping("/update")
-    public ResponseEntity<CartDetailResponse> updateCartItemWithProductChange(@Valid @RequestBody UpdateCartItemRequest request) {
+    @PutMapping
+    public ResponseEntity<CartDetailResponse> updateCartItemWithProductChange(
+            @Valid @RequestBody UpdateCartRequest request) {
         String email = getCurrentUserEmail();
         CartDetailResponse response = cartService.updateCartItem(email, request);
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/{cartDetailId}")
-    public ResponseEntity<Void> removeFromCart(
-            @PathVariable @Positive(message = "Cart detail ID must be positive") Long cartDetailId) {
+    @DeleteMapping
+    public ResponseEntity<Void> removeFromCart(@Valid @RequestBody RemoveFromCartRequest request) {
         String email = getCurrentUserEmail();
-        cartService.removeFromCart(email, cartDetailId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/remove-multiple")
-    public ResponseEntity<Void> removeMultipleFromCart(@Valid @RequestBody RemoveFromCartRequest request) {
-        String email = getCurrentUserEmail();
-        cartService.removeMultipleFromCart(email, request.getCartDetailIds());
+        cartService.removeFromCart(email, request.getCartDetailIds());
         return ResponseEntity.noContent().build();
     }
 

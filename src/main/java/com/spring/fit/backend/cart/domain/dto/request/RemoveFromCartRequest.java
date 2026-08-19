@@ -1,4 +1,4 @@
-package com.spring.fit.backend.cart.domain.dto;
+package com.spring.fit.backend.cart.domain.dto.request;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -16,8 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 public class RemoveFromCartRequest {
 
-    @NotNull(message = "Danh sách cart detail ID không được null")
-    @NotEmpty(message = "Danh sách cart detail ID không được rỗng")
-    private List<@Positive(message = "Cart detail ID phải là số dương") Long> cartDetailIds;
+    @NotEmpty(message = "Cart detail ID cannot be null")
+    private List<@Positive(message = "Cart detail ID must be positive") Long> cartDetailIds;
 }
 

@@ -1,9 +1,9 @@
 package com.spring.fit.backend.cart.service;
 
-import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
-import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
-import com.spring.fit.backend.cart.domain.dto.CartDetailWithPromotionResponse;
-import com.spring.fit.backend.cart.domain.dto.UpdateCartItemRequest;
+import com.spring.fit.backend.cart.domain.dto.request.AddToCartRequest;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailWithPromotionResponse;
+import com.spring.fit.backend.cart.domain.dto.request.UpdateCartRequest;
 
 import java.util.List;
 
@@ -15,11 +15,9 @@ public interface CartService {
 
     List<CartDetailWithPromotionResponse> getCartItemsWithPromotion(String userEmail);
 
-    CartDetailResponse updateCartItem(String userEmail, UpdateCartItemRequest request);
+    CartDetailResponse updateCartItem(String userEmail, UpdateCartRequest request);
 
-    void removeFromCart(String userEmail, Long cartDetailId);
-
-    void removeMultipleFromCart(String userEmail, List<Long> cartDetailIds);
+    void removeFromCart(String userEmail, List<Long> cartDetailIds);
 
     void clearCart(String userEmail);
     

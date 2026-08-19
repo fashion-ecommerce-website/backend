@@ -12,8 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.ForeignKey;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotNull;
 
@@ -30,9 +28,7 @@ import lombok.Builder.Default;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "user_roles", uniqueConstraints = {
-		@UniqueConstraint(name = "uk_user_role", columnNames = { "user_id", "role_id" })
-})
+@Table(name = "user_roles")
 public class UserRoleEntity {
 
 	@Id
@@ -41,12 +37,12 @@ public class UserRoleEntity {
 
 	@NotNull(message = "User is required")
 	@ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
-	@JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_user_role_user"))
+	@JoinColumn(name = "user_id", nullable = false)
 	private UserEntity user;
 
 	@NotNull(message = "Role is required")
 	@ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
-	@JoinColumn(name = "role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_user_role_role"))
+	@JoinColumn(name = "role_id", nullable = false)
 	private RoleEntity role;
 
 	@Default

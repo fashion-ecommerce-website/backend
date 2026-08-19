@@ -22,9 +22,6 @@ import java.util.Objects;
            @Index(name = "idx_voucher_usage_order_id", columnList = "order_id"),
            @Index(name = "idx_voucher_usage_status", columnList = "status"),
            @Index(name = "idx_voucher_usage_used_at", columnList = "used_at")
-       },
-       uniqueConstraints = {
-           @UniqueConstraint(name = "uk_voucher_usage_order", columnNames = {"order_id"})
        })
 @Getter
 @Setter
@@ -38,15 +35,15 @@ public class VoucherUsage {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "voucher_id", nullable = false, foreignKey = @ForeignKey(name = "fk_voucher_usage_voucher"))
+    @JoinColumn(name = "voucher_id", nullable = false)
     private Voucher voucher;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_voucher_usage_user"))
+    @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", foreignKey = @ForeignKey(name = "fk_voucher_usage_order"))
+    @JoinColumn(name = "order_id")
     private Order order;
 
     @Enumerated(EnumType.STRING)

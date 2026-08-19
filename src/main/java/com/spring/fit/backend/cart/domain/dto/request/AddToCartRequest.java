@@ -1,4 +1,4 @@
-package com.spring.fit.backend.cart.domain.dto;
+package com.spring.fit.backend.cart.domain.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

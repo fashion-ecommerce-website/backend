@@ -14,7 +14,7 @@ public class PasswordResetToken {
     private String token;
 
     @OneToOne
-    @JoinColumn(nullable = false, name = "user_id", foreignKey = @ForeignKey(name = "fk_password_reset_token_user"))
+    @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
     private ZonedDateTime expiryDate;

@@ -1,9 +1,9 @@
 package com.spring.fit.backend.cart.service.impl;
 
-import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
-import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
-import com.spring.fit.backend.cart.domain.dto.CartDetailWithPromotionResponse;
-import com.spring.fit.backend.cart.domain.dto.UpdateCartItemRequest;
+import com.spring.fit.backend.cart.domain.dto.request.AddToCartRequest;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailWithPromotionResponse;
+import com.spring.fit.backend.cart.domain.dto.request.UpdateCartRequest;
 import com.spring.fit.backend.cart.domain.entity.CartDetail;
 import com.spring.fit.backend.cart.repository.CartDetailRepository;
 import com.spring.fit.backend.cart.service.CartService;
@@ -179,7 +179,7 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public CartDetailResponse updateCartItem(String userEmail, UpdateCartItemRequest request) {
+    public CartDetailResponse updateCartItem(String userEmail, UpdateCartRequest request) {
         log.info("Inside CartServiceImpl.updateCartItem userEmail={}, cartDetailId={}, newProductDetailId={}, quantity={}", 
                 userEmail, request.getCartDetailId(), request.getNewProductDetailId(), request.getQuantity());
 
@@ -207,30 +207,8 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public void removeFromCart(String userEmail, Long cartDetailId) {
-        log.info("Inside CartServiceImpl.removeFromCart userEmail={}, cartDetailId={}", userEmail, cartDetailId);
-
-        try {
-            UserEntity user = findUserByEmail(userEmail);
-
-            // Check if cart detail exists and belongs to user
-            CartDetail cartDetail = cartDetailRepository.findByIdAndUserId(cartDetailId, user.getId())
-                    .orElseThrow(() -> new ErrorException(HttpStatus.NOT_FOUND, 
-                        "Cart item not found or you don't have permission to access"));
-
-            cartDetailRepository.delete(cartDetail);
-            log.info("Inside CartServiceImpl.removeFromCart success cartDetailId={}", cartDetailId);
-            
-        } catch (Exception e) {
-            log.error("Inside CartServiceImpl.removeFromCart error userEmail={}, cartDetailId={}, message={}", 
-                    userEmail, cartDetailId, e.getMessage(), e);
-            throw e;
-        }
-    }
-
-    @Override
-    public void removeMultipleFromCart(String userEmail, List<Long> cartDetailIds) {
-        log.info("Inside CartServiceImpl.removeMultipleFromCart userEmail={}, itemCount={}", userEmail, cartDetailIds.size());
+    public void removeFromCart(String userEmail, List<Long> cartDetailIds) {
+        log.info("Inside CartServiceImpl.removeFromCart userEmail={}, itemCount={}", userEmail, cartDetailIds.size());
 
         try {
             UserEntity user = findUserByEmail(userEmail);
@@ -242,10 +220,10 @@ public class CartServiceImpl implements CartService {
                     "No cart items found or you don't have permission to access");
             }
 
-            log.info("Inside CartServiceImpl.removeMultipleFromCart success userEmail={}, itemCount={}", userEmail, deletedCount);
+            log.info("Inside CartServiceImpl.removeFromCart success userEmail={}, itemCount={}", userEmail, deletedCount);
             
         } catch (Exception e) {
-            log.error("Inside CartServiceImpl.removeMultipleFromCart error userEmail={}, message={}", userEmail, e.getMessage(), e);
+            log.error("Inside CartServiceImpl.removeFromCart error userEmail={}, message={}", userEmail, e.getMessage(), e);
             throw e;
         }
     }

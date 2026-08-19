@@ -15,9 +15,6 @@ import java.util.Objects;
        indexes = {
            @Index(name = "idx_voucher_rank_rule_voucher_id", columnList = "voucher_id"),
            @Index(name = "idx_voucher_rank_rule_rank_id", columnList = "rank_id")
-       },
-       uniqueConstraints = {
-           @UniqueConstraint(name = "uk_voucher_rank_rule", columnNames = {"voucher_id", "rank_id"})
        })
 @Getter
 @Setter
@@ -31,11 +28,11 @@ public class VoucherRankRule {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "voucher_id", nullable = false, foreignKey = @ForeignKey(name = "fk_voucher_rank_rule_voucher"))
+    @JoinColumn(name = "voucher_id", nullable = false)
     private Voucher voucher;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rank_id", nullable = false, foreignKey = @ForeignKey(name = "fk_voucher_rank_rule_rank"))
+    @JoinColumn(name = "rank_id", nullable = false)
     private UserRank rank;
 
     @Override

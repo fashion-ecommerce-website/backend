@@ -12,12 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 
 @Entity
-@Table(
-        name = "product_details",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"product_id", "color_id", "size_id"})
-        }
-)
+@Table(name = "product_details")
 @Getter
 @Setter
 @AllArgsConstructor

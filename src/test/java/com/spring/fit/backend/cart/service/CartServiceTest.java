@@ -1,7 +1,7 @@
 package com.spring.fit.backend.cart.service;
 
-import com.spring.fit.backend.cart.domain.dto.AddToCartRequest;
-import com.spring.fit.backend.cart.domain.dto.CartDetailResponse;
+import com.spring.fit.backend.cart.domain.dto.request.AddToCartRequest;
+import com.spring.fit.backend.cart.domain.dto.response.CartDetailResponse;
 import com.spring.fit.backend.cart.domain.entity.CartDetail;
 import com.spring.fit.backend.cart.repository.CartDetailRepository;
 import com.spring.fit.backend.cart.service.impl.CartServiceImpl;

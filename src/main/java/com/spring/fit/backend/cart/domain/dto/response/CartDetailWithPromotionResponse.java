@@ -1,4 +1,4 @@
-package com.spring.fit.backend.cart.domain.dto;
+package com.spring.fit.backend.cart.domain.dto.response;
 
 import com.spring.fit.backend.cart.domain.entity.CartDetail;
 import lombok.AllArgsConstructor;
@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CartDetailResponse {
+public class CartDetailWithPromotionResponse {
 
     private Long id;
     private Long productDetailId;
@@ -21,21 +21,25 @@ public class CartDetailResponse {
     private String productSlug;
     private String colorName;
     private String sizeName;
-    private BigDecimal price;
+    private BigDecimal price;              // base price
+    private BigDecimal finalPrice;         // after promotion
+    private Integer percentOff;            // integer percent
+    private Long promotionId;              // nullable
+    private String promotionName;          // nullable
     private Integer quantity;
     private Integer availableQuantity;
     private String imageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static CartDetailResponse fromEntity(CartDetail cartDetail) {
+    public static CartDetailWithPromotionResponse fromEntity(CartDetail cartDetail) {
         String imageUrl = null;
         if (cartDetail.getProductDetail().getProductImages() != null 
             && !cartDetail.getProductDetail().getProductImages().isEmpty()) {
             imageUrl = cartDetail.getProductDetail().getProductImages().iterator().next().getImage().getUrl();
         }
 
-        return CartDetailResponse.builder()
+        return CartDetailWithPromotionResponse.builder()
                 .id(cartDetail.getId())
                 .productDetailId(cartDetail.getProductDetail().getId())
                 .productTitle(cartDetail.getProductDetail().getProduct().getTitle())
@@ -51,4 +55,3 @@ public class CartDetailResponse {
                 .build();
     }
 }
-

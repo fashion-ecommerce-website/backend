@@ -9,8 +9,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "wishlists",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "detail_id"}))
+@Table(name = "wishlists")
 @Getter
 @Setter
 @NoArgsConstructor

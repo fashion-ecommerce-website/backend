@@ -16,12 +16,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(
-        name = "cart_details",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_cart_user_detail", columnNames = {"user_id", "detail_id"})
-        }
-)
+@Table(name = "cart_details")
 public class CartDetail {
 
     @Id
@@ -30,16 +25,12 @@ public class CartDetail {
 
     // FK -> users.id
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_cart_user"))
+    @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
     // FK -> product_details.id
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "detail_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_cart_detail"))
+    @JoinColumn(name = "detail_id", nullable = false)
     private ProductDetail productDetail;
 
     @Column(nullable = false)

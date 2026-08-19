@@ -78,7 +78,7 @@ public class Order {
     private String note;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "voucher_id", foreignKey = @ForeignKey(name = "fk_order_voucher"))
+    @JoinColumn(name = "voucher_id")
     private Voucher voucher;
 
     @ManyToOne(fetch = FetchType.LAZY)
