@@ -39,10 +39,15 @@ logs/
 *.sqlite
 *.sqlite3
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.local
 .env.production
+env.txt
+*.env
+account.txt
+*_accessKeys.csv
+*.csv
 
 # Docker
 docker-compose.override.yml
@@ -55,3 +60,4 @@ docker-compose.override.yml
 # Temporary files
 *.tmp
 *.temp
+

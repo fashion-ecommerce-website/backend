@@ -2,10 +2,12 @@ package com.spring.fit.backend.common.config;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@ConditionalOnProperty(prefix = "cloudinary", name = "cloud_name")
 public class CloudinaryConfig {
 
     private final CloudinaryProperties properties;

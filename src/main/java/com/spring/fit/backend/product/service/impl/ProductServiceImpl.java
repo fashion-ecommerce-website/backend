@@ -1385,7 +1385,28 @@ public class ProductServiceImpl implements ProductService {
                 }
 
                 productImageRepository.deleteAll(imagesToDelete);
-                log.debug("Deleted {} images with URL {} for product detail {}", imagesToDelete.size(), imageUrl, detail.getId());
+                log.debug("Deleted {} product_images with URL {} for product detail {}", imagesToDelete.size(), imageUrl, detail.getId());
+
+                // Kiểm tra xem còn ProductDetail nào khác đang dùng URL này không
+                List<ProductImage> remainingReferences = productImageRepository.findByImageUrl(imageUrl);
+                if (remainingReferences.isEmpty()) {
+                    // Nếu không còn detail nào dùng: Xóa file vật lý trên AWS S3
+                    String s3Key = imageService.extractPublicIdFromUrl(imageUrl);
+                    if (s3Key != null && !s3Key.isBlank()) {
+                        try {
+                            imageService.deleteImage(s3Key);
+                            log.info("Deleted orphaned image from S3 storage: key={}", s3Key);
+                        } catch (Exception ex) {
+                            log.warn("Could not delete image from S3 storage: key={}, reason={}", s3Key, ex.getMessage());
+                        }
+                    }
+
+                    // Dọn dẹp bản ghi trong bảng images để tránh rác database
+                    imageRepository.findByUrl(imageUrl).ifPresent(img -> {
+                        imageRepository.delete(img);
+                        log.debug("Deleted orphaned Image entity from DB: id={}, url={}", img.getId(), imageUrl);
+                    });
+                }
 
             } catch (Exception e) {
                 log.error("Error deleting image with URL {} for product detail {}: {}", imageUrl, detail.getId(), e.getMessage());

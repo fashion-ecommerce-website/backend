@@ -6,6 +6,7 @@ import com.spring.fit.backend.common.config.CloudinaryProperties;
 import com.spring.fit.backend.common.service.ImageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -16,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
+@ConditionalOnBean(Cloudinary.class)
 @RequiredArgsConstructor
 @Slf4j
 public class CloudinaryService implements ImageService {

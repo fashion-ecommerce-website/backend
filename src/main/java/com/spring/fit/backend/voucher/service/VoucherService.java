@@ -1,6 +1,5 @@
 package com.spring.fit.backend.voucher.service;
 
-import com.cloudinary.api.exceptions.BadRequest;
 import com.spring.fit.backend.voucher.domain.dto.VoucherByUserResponse;
 import com.spring.fit.backend.voucher.domain.dto.VoucherValidateRequest;
 import com.spring.fit.backend.voucher.domain.dto.VoucherValidateResponse;
@@ -29,7 +28,7 @@ public interface VoucherService {
     void toggleAdminVoucherActive(Long id);
 
     // Apply voucher with locking to enforce usage limits atomically
-    void applyVoucher(VoucherValidateRequest request, Long userId, Long orderId) throws BadRequest;
+    void applyVoucher(VoucherValidateRequest request, Long userId, Long orderId);
 
     // Cancel usage (e.g., when order is cancelled)
     void cancelVoucherUsageByOrderId(Long orderId);

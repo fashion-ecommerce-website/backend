@@ -58,12 +58,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/vouchers/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/promotions/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/common/**").permitAll()
-                        .requestMatchers("/api/chatbot/**").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/api/admin/**").hasRole(RoleType.ADMIN.name())
                         .requestMatchers("/api/reports/**").hasRole(RoleType.ADMIN.name())
-                        .requestMatchers("/api/chatbot/admin/**").hasRole(RoleType.ADMIN.name())
                         .requestMatchers("/api/products/import").hasRole(RoleType.ADMIN.name())
 
                         // Require authentication for private user / transactional APIs
@@ -91,10 +89,12 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000",
+                "http://localhost:3001",
             "https://frontend-customer-two.vercel.app"
         ));
         configuration.setAllowedOriginPatterns(Arrays.asList(
             "http://localhost:3000",
+                "http://localhost:3001",
             "https://frontend-customer-two.vercel.app",
             "https://*.vercel.app"
         ));
