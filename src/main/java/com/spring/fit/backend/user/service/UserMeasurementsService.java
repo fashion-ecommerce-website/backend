@@ -1,7 +1,7 @@
 package com.spring.fit.backend.user.service;
 
-import com.spring.fit.backend.user.domain.dto.UserMeasurementsRequest;
-import com.spring.fit.backend.user.domain.dto.UserMeasurementsResponse;
+import com.spring.fit.backend.user.domain.dto.request.UserMeasurementsRequest;
+import com.spring.fit.backend.user.domain.dto.response.UserMeasurementsResponse;
 
 import java.util.Optional;
 

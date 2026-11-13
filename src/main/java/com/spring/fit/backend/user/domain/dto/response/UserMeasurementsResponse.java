@@ -1,4 +1,4 @@
-package com.spring.fit.backend.user.domain.dto;
+package com.spring.fit.backend.user.domain.dto.response;
 
 import com.spring.fit.backend.user.domain.enums.*;
 import lombok.AllArgsConstructor;
