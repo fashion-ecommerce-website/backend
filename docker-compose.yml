@@ -22,7 +22,7 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
 
   redisinsight:
     image: redis/redisinsight:latest
@@ -58,6 +58,7 @@ services:
       AWS_CLOUDFRONT_DOMAIN: ${AWS_CLOUDFRONT_DOMAIN:-https://d23u4o4xh16173.cloudfront.net}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      DAILY_REPORT_EMAIL: ${DAILY_REPORT_EMAIL:-thinhndde170386@fpt.edu.vn}
       GHN_TOKEN: ${GHN_TOKEN:-}
       GHN_SHOP_ID: ${GHN_SHOP_ID:-197531}
       PERSPECTIVE_API_KEY: ${PERSPECTIVE_API_KEY:-}
