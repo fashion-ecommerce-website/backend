@@ -4,6 +4,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: postgres
+    restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-fit_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -18,6 +19,7 @@ services:
   redis:
     image: redis:7
     container_name: redis
+    restart: always
     ports:
       - "6379:6379"
     volumes:
@@ -27,6 +29,7 @@ services:
   redisinsight:
     image: redis/redisinsight:latest
     container_name: redisinsight
+    restart: always
     ports:
       - "8001:8001"
     depends_on:
@@ -35,6 +38,7 @@ services:
   app:
     build: .
     container_name: fit-backend
+    restart: always
     depends_on:
       - postgres
       - redis
@@ -63,6 +67,13 @@ services:
       GHN_SHOP_ID: ${GHN_SHOP_ID:-197531}
       PERSPECTIVE_API_KEY: ${PERSPECTIVE_API_KEY:-}
       PERSPECTIVE_API_URL: ${PERSPECTIVE_API_URL:-https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ap-southeast-1
+        awslogs-group: /fit-project/backend
+        awslogs-stream: fit-backend-ec2
+        awslogs-create-group: "true"
 
 volumes:
   pg-data:
